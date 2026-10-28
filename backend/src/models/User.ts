@@ -1,11 +1,6 @@
-import { Document, Schema } from 'mongoose';
+import { Schema } from 'mongoose';
 import { optionalText, registered, requiredText } from './modelHelpers';
-
-export interface UserDocument extends Document {
-  name: string; email: string; passwordHash?: string;
-  role: 'employee' | 'support_agent' | 'admin'; department?: string;
-  isActive: boolean; lastLoginAt?: Date; createdAt: Date; updatedAt: Date;
-}
+import type { UserDocument } from '../types/modelTypes/User.js';
 
 const userSchema = new Schema<UserDocument>({
   name: requiredText(160),

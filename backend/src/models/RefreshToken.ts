@@ -1,15 +1,6 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 import { objectId, registered, requiredText } from './modelHelpers';
-
-export interface RefreshTokenDocument extends Document {
-  userId: Types.ObjectId;
-  tokenHash: string;
-  expiresAt: Date;
-  revokedAt?: Date;
-  replacedByTokenHash?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import type { RefreshTokenDocument } from '../types/modelTypes/RefreshToken.js';
 
 const refreshTokenSchema = new Schema<RefreshTokenDocument>({
   userId: { type: objectId(), required: true, ref: 'Users', immutable: true },

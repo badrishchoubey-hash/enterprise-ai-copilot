@@ -1,11 +1,6 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 import { objectId, optionalText, registered, requiredText } from './modelHelpers';
-
-export interface QueryLogDocument extends Document {
-  userId: Types.ObjectId; conversationId?: Types.ObjectId; query: string;
-  latencyMs: number; resultCount: number; retrievalMode: 'keyword' | 'vector' | 'hybrid';
-  modelName?: string; requestId: string; createdAt: Date; updatedAt: Date;
-}
+import type { QueryLogDocument } from '../types/modelTypes/QueryLog.js';
 
 const queryLogSchema = new Schema<QueryLogDocument>({
   userId: { type: objectId(), required: true, ref: 'Users' }, conversationId: { type: objectId(), ref: 'Conversations' }, query: requiredText(20_000),

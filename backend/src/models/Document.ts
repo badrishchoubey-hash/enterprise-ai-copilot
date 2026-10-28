@@ -1,13 +1,6 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 import { accessFields, objectId, optionalText, registered, requiredText } from './modelHelpers';
-
-export interface KnowledgeDocument extends Document {
-  name: string; type: string; department?: string;
-  status: 'uploading' | 'processing' | 'ready' | 'failed' | 'archived';
-  fileHash: string; uploadedBy: Types.ObjectId; storageKey: string;
-  pageCount?: number; errorMessage?: string; tenantId: Types.ObjectId;
-  visibility: 'private' | 'department' | 'organization'; createdAt: Date; updatedAt: Date;
-}
+import type { KnowledgeDocument } from '../types/modelTypes/Document.js';
 
 const documentSchema = new Schema<KnowledgeDocument>({
   ...accessFields, name: requiredText(255), type: { ...requiredText(80), lowercase: true },

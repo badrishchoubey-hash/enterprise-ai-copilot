@@ -1,10 +1,6 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 import { objectId, optionalText, registered } from './modelHelpers';
-
-export interface FeedbackDocument extends Document {
-  userId: Types.ObjectId; messageId: Types.ObjectId; rating: 'up' | 'down';
-  comment?: string; createdAt: Date; updatedAt: Date;
-}
+import type { FeedbackDocument } from '../types/modelTypes/Feedback.js';
 
 const feedbackSchema = new Schema<FeedbackDocument>({
   userId: { type: objectId(), required: true, ref: 'Users', immutable: true },

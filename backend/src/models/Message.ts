@@ -1,12 +1,6 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 import { objectId, optionalText, registered, requiredText } from './modelHelpers';
-
-export interface MessageDocument extends Document {
-  conversationId: Types.ObjectId; userId: Types.ObjectId;
-  role: 'user' | 'assistant' | 'system' | 'tool'; content: string;
-  citations: Array<{ documentId: Types.ObjectId; chunkId?: Types.ObjectId; score?: number }>;
-  modelName?: string; tokenCount?: number; createdAt: Date; updatedAt: Date;
-}
+import type { MessageDocument } from '../types/modelTypes/Message.js';
 
 const messageSchema = new Schema<MessageDocument>({
   conversationId: { type: objectId(), required: true, ref: 'Conversations', immutable: true },

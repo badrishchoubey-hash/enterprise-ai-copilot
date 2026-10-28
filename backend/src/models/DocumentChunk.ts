@@ -1,11 +1,6 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 import { accessFields, objectId, optionalText, registered, requiredText } from './modelHelpers';
-
-export interface DocumentChunkDocument extends Document {
-  documentId: Types.ObjectId; chunkIndex: number; content: string; tokenCount?: number;
-  pageNumber?: number; embeddingRef?: string; metadata?: Record<string, unknown>;
-  tenantId: Types.ObjectId; createdAt: Date; updatedAt: Date;
-}
+import type { DocumentChunkDocument } from '../types/modelTypes/DocumentChunk.js';
 
 const chunkSchema = new Schema<DocumentChunkDocument>({
   ...accessFields, documentId: { type: objectId(), required: true, ref: 'Documents', immutable: true },

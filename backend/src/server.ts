@@ -17,7 +17,6 @@ const PORT = Number(process.env.PORT) || 5000;
 // Security Fix (S5689): Disable X-Powered-By header
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-app.use(requestLogger);
 app.use(requestTimeout());
 app.use(rateLimit());
 
@@ -42,6 +41,7 @@ app.use(
 );
 
 app.use(express.json({ limit: '1mb' }));
+app.use(requestLogger);
 app.use('/api/auth', authRoutes);
 
 // Health Check Endpoint

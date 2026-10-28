@@ -1,38 +1,127 @@
+
 import type { NextFunction, Request, Response } from 'express';
-import { loginUser, refreshAccessToken, registerUser, revokeRefreshToken } from '../services/authService.js';
+import {
+  loginUser,
+  refreshAccessToken,
+  registerUser,
+  revokeRefreshToken,
+} from '../services/authService.js';
 
-const bodyString = (value: unknown): value is string => typeof value === 'string';
+type JsonObject = Record<string, unknown>;
 
-export async function register(req: Request, res: Response, next: NextFunction): Promise<void> {
+const isJsonObject = (value: unknown): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+export async function register(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const { name, email, password, department } = req.body as Record<string, unknown>;
-    if (!bodyString(name) || !bodyString(email) || !bodyString(password)) { res.status(400).json({ error: 'name, email, and password are required.' }); return; }
-    // Public registration always creates an employee. Privileged roles must be
-    // assigned by an authenticated administrator through a separate workflow.
-    res.status(201).json(await registerUser({ name, email, password, department: bodyString(department) ? department : undefined }));
-  } catch (error) { next(error); }
+    const body: unknown = req.body;
+
+    if (!isJsonObject(body)) {
+      res.status(400).json({ error: 'Request body must be a JSON object.' });
+      return;
+    }
+
+    const { name, email, password, department } = body;
+
+    if (
+      !isString(name) ||
+      !isString(email) ||
+      !isString(password)
+    ) {
+      res.status(400).json({
+        error: 'name, email, and password are required.',
+      });
+      return;
+    }
+
+    const result = await registerUser({
+      name,
+      email,
+      password,
+      department: isString(department)
+        ? department
+        : undefined,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
 }
 
-export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function login(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const { email, password } = req.body as Record<string, unknown>;
-    if (!bodyString(email) || !bodyString(password)) { res.status(400).json({ error: 'email and password are required.' }); return; }
-    res.status(200).json(await loginUser(email, password));
-  } catch (error) { next(error); }
+    const body: unknown = req.body;
+
+    if (!isJsonObject(body)) {
+      res.status(400).json({ error: 'Request body must be a JSON object.' });
+      return;
+    }
+
+    const { email, password } = body;
+
+    if (!isString(email) || !isString(password)) {
+      res.status(400).json({
+        error: 'email and password are required.',
+      });
+      return;
+    }
+
+    const result = await loginUser(email, password);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 }
 
-export async function refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function refresh(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const token = (req.body as { refreshToken?: unknown }).refreshToken;
-    if (!bodyString(token)) { res.status(400).json({ error: 'refreshToken is required.' }); return; }
-    res.status(200).json(await refreshAccessToken(token));
-  } catch (error) { next(error); }
+    const body: unknown = req.body;
+    const token: unknown = isJsonObject(body) ? body.refreshToken : undefined;
+
+    if (!isString(token) || !token.trim()) {
+      res.status(400).json({
+        error: 'refreshToken is required.',
+      });
+      return;
+    }
+
+    const result = await refreshAccessToken(token);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 }
 
-export async function logout(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function logout(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   try {
-    const token = (req.body as { refreshToken?: unknown }).refreshToken;
-    if (bodyString(token)) await revokeRefreshToken(token);
+    const body: unknown = req.body;
+    const token: unknown = isJsonObject(body) ? body.refreshToken : undefined;
+
+    if (isString(token) && token.trim()) {
+      await revokeRefreshToken(token);
+    }
+
     res.status(204).send();
-  } catch (error) { next(error); }
+  } catch (error) {
+    next(error);
+  }
 }

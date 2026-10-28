@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler } from 'express';
 import { AppError } from './appError.js';
+import { logError } from '../utils/logger.js';
 
 const isMongoError = (error: unknown): boolean => {
   const value = error as { name?: string; code?: number };
@@ -42,6 +43,6 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   else if ((error as { type?: string })?.type === 'entity.parse.failed') { status = 400; code = 'INVALID_JSON'; message = 'Request body contains invalid JSON.'; }
   // Log only the safe error category and request metadata; never return stack traces.
   const cause = (error as { cause?: { name?: string; code?: string | number } })?.cause;
-  console.error(JSON.stringify({ requestId, method: req.method, path: req.path, status, code, errorType: (error as { name?: string })?.name, causeType: cause?.name, causeCode: cause?.code }));
+  logError('api.error', { requestId, method: req.method, path: req.path, status, code, errorType: (error as { name?: string })?.name, errorMessage: (error as { message?: string })?.message, causeType: cause?.name, causeCode: cause?.code });
   res.status(status).json({ error: message, code, requestId });
 };

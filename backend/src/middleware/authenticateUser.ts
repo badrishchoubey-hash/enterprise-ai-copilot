@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import Users from '../models/User.js';
 import { verifyAccessToken } from '../services/authService.js';
-import { AuthError } from '../services/authService.js';
+import { AuthError } from '../errors/AuthError.js';
 
 export async function authenticateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.header('authorization');
