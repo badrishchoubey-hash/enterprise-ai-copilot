@@ -12,9 +12,12 @@ export const connectDB = async (): Promise<void> => {
     );
   }
 
-  const usesCredentialPlaceholders = /mongodb(?:\+srv)?:\/\/[^@]*<[^>]+>[^@]*@/.test(
-    configuredUri
-  );
+  const authorityPart = configuredUri.split('@')[0] ?? '';
+  const usesCredentialPlaceholders =
+    configuredUri.startsWith('mongodb') &&
+    authorityPart.includes('<') &&
+    authorityPart.includes('>');
+
   const username = process.env.DB_USERNAME;
   const password = process.env.DB_PASSWORD;
 
@@ -26,16 +29,16 @@ export const connectDB = async (): Promise<void> => {
 
   const mongoUri = usesCredentialPlaceholders
     ? configuredUri.replace(
-        /^(mongodb(?:\+srv)?:\/\/)[^@]+@/,
-        `$1${encodeURIComponent(username as string)}:${encodeURIComponent(password as string)}@`
-      )
+      /^(mongodb(?:\+srv)?:\/\/)[^@]+@/,
+      `$1${encodeURIComponent(username as string)}:${encodeURIComponent(password as string)}@`
+    )
     : configuredUri;
 
   try {
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10_000 });
     console.log('MongoDB connected');
   } catch (error) {
-    console.error('Error connecting to MongoDB:', error);
+    console.error(JSON.stringify({ code: 'DATABASE_UNAVAILABLE', message: 'MongoDB connection failed.' }));
     throw error;
   }
 };

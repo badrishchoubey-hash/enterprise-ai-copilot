@@ -18,15 +18,20 @@
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
     "express-validator": "^7.3.2",
+    "file-type": "^22.2.0",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.11.4"
+    "mongoose": "^9.11.4",
+    "multer": "^2.5.0",
+    "sanitize-filename": "^1.6.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
     "@types/node": "^26.6.5",
+    "@types/sanitize-filename": "^1.1.28",
     "nodemon": "^3.1.14",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.23.15",
