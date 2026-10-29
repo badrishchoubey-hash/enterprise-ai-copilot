@@ -1,4 +1,4 @@
-import type { Document, Types } from 'mongoose';
+import type { Document, Types } from "mongoose";
 
 export interface QueryLogDocument extends Document {
   userId: Types.ObjectId;
@@ -6,7 +6,7 @@ export interface QueryLogDocument extends Document {
   query: string;
   latencyMs: number;
   resultCount: number;
-  retrievalMode: 'keyword' | 'vector' | 'hybrid';
+  retrievalMode: "keyword" | "vector" | "hybrid";
   modelName?: string;
   requestId: string;
   createdAt: Date;

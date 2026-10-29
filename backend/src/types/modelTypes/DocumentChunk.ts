@@ -1,4 +1,4 @@
-import type { Document, Types } from 'mongoose';
+import type { Document, Types } from "mongoose";
 
 export interface DocumentChunkDocument extends Document {
   documentId: Types.ObjectId;
@@ -10,7 +10,7 @@ export interface DocumentChunkDocument extends Document {
   metadata?: Record<string, unknown>;
   tenantId: Types.ObjectId;
   department?: string;
-  visibility: 'private' | 'department' | 'organization';
+  visibility: "private" | "department" | "organization";
   createdAt: Date;
   updatedAt: Date;
 }

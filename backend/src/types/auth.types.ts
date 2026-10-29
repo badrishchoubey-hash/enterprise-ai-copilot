@@ -1,7 +1,7 @@
-import type { SignOptions } from 'jsonwebtoken';
+import type { SignOptions } from "jsonwebtoken";
 
-export type UserRole = 'employee' | 'support_agent' | 'admin';
-export type JwtExpiresIn = NonNullable<SignOptions['expiresIn']>;
+export type UserRole = "employee" | "support_agent" | "admin";
+export type JwtExpiresIn = NonNullable<SignOptions["expiresIn"]>;
 
 export interface AccessTokenClaims {
   userId: string;
@@ -18,7 +18,7 @@ export interface JwtPayload extends AccessTokenClaims {
 export interface RefreshJwtPayload {
   sub: string;
   jti: string;
-  type: 'refresh';
+  type: "refresh";
   iat?: number;
   exp?: number;
 }

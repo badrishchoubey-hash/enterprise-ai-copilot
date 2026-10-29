@@ -1,12 +1,11 @@
+import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import mongoose, { Types, type ClientSession } from "mongoose";
 
-import bcrypt from 'bcryptjs';
-import crypto from 'node:crypto';
-import jwt from 'jsonwebtoken';
-import mongoose, { Types, type ClientSession } from 'mongoose';
-
-import Users from '../models/User.js';
-import type { UserDocument } from '../types/modelTypes/User.js';
-import RefreshTokens from '../models/RefreshToken.js';
+import Users from "../models/User.js";
+import type { UserDocument } from "../types/modelTypes/User.js";
+import RefreshTokens from "../models/RefreshToken.js";
 import type {
   AuthTokens,
   JwtExpiresIn,
@@ -14,22 +13,20 @@ import type {
   PublicUser,
   RefreshJwtPayload,
   RegisterUserInput,
-} from '../types/auth.types.js';
-import { AppError } from '../middleware/appError.js';
-import { logError, logInfo } from '../utils/logger.js';
-import { AuthError } from '../errors/AuthError.js';
+} from "../types/auth.types.js";
+import { AppError } from "../middleware/appError.js";
+import { logError, logInfo } from "../utils/logger.js";
+import { AuthError } from "../errors/AuthError.js";
 
 // --------------------------------------------------
 // Configuration
 // --------------------------------------------------
 
-const ACCESS_EXPIRES_IN: JwtExpiresIn = (
-  process.env.JWT_EXPIRES_IN ?? '15m'
-) as JwtExpiresIn;
+const ACCESS_EXPIRES_IN: JwtExpiresIn = (process.env.JWT_EXPIRES_IN ??
+  "15m") as JwtExpiresIn;
 
-const REFRESH_EXPIRES_IN: JwtExpiresIn = (
-  process.env.JWT_REFRESH_EXPIRES_IN ?? '7d'
-) as JwtExpiresIn;
+const REFRESH_EXPIRES_IN: JwtExpiresIn = (process.env.JWT_REFRESH_EXPIRES_IN ??
+  "7d") as JwtExpiresIn;
 
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS) || 12;
 
@@ -43,8 +40,8 @@ const accessSecret = (): string => {
   if (!secret) {
     throw new AppError(
       503,
-      'Authentication service is not configured.',
-      'AUTH_CONFIGURATION_ERROR'
+      "Authentication service is not configured.",
+      "AUTH_CONFIGURATION_ERROR",
     );
   }
 
@@ -57,8 +54,8 @@ const refreshSecret = (): string => {
   if (!secret) {
     throw new AppError(
       503,
-      'Authentication service is not configured.',
-      'AUTH_CONFIGURATION_ERROR'
+      "Authentication service is not configured.",
+      "AUTH_CONFIGURATION_ERROR",
     );
   }
 
@@ -69,48 +66,51 @@ const refreshSecret = (): string => {
 // Helpers
 // --------------------------------------------------
 
-const errorMetadata = (error: unknown): { errorType?: string; errorCode?: string | number } => {
-  if (typeof error !== 'object' || error === null) {
+const errorMetadata = (
+  error: unknown,
+): { errorType?: string; errorCode?: string | number } => {
+  if (typeof error !== "object" || error === null) {
     return {};
   }
 
   const candidate = error as { name?: unknown; code?: unknown };
 
   return {
-    errorType: typeof candidate.name === 'string' ? candidate.name : undefined,
+    errorType: typeof candidate.name === "string" ? candidate.name : undefined,
     errorCode:
-      typeof candidate.code === 'string' || typeof candidate.code === 'number'
+      typeof candidate.code === "string" || typeof candidate.code === "number"
         ? candidate.code
         : undefined,
   };
 };
 
-const isUserRole = (value: unknown): value is JwtPayload['role'] =>
-  value === 'employee' || value === 'support_agent' || value === 'admin';
+const isUserRole = (value: unknown): value is JwtPayload["role"] =>
+  value === "employee" || value === "support_agent" || value === "admin";
 
 const isRefreshJwtPayload = (value: unknown): value is RefreshJwtPayload => {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
   return (
-    candidate.type === 'refresh' &&
-    typeof candidate.sub === 'string' &&
-    typeof candidate.jti === 'string'
+    candidate.type === "refresh" &&
+    typeof candidate.sub === "string" &&
+    typeof candidate.jti === "string"
   );
 };
 
 const isAccessJwtPayload = (value: unknown): value is JwtPayload => {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
   return (
-    typeof candidate.userId === 'string' &&
+    typeof candidate.userId === "string" &&
     isUserRole(candidate.role) &&
-    (candidate.department === undefined || typeof candidate.department === 'string')
+    (candidate.department === undefined ||
+      typeof candidate.department === "string")
   );
 };
 
@@ -123,7 +123,7 @@ const publicUser = (user: UserDocument): PublicUser => ({
 });
 
 const hashRefreshToken = (token: string): string =>
-  crypto.createHash('sha256').update(token).digest('hex');
+  crypto.createHash("sha256").update(token).digest("hex");
 
 /**
  * Converts a supported JWT duration into a database expiry date.
@@ -132,12 +132,12 @@ const hashRefreshToken = (token: string): string =>
  * Numeric values are interpreted as seconds, matching JWT semantics.
  */
 const expiresAtFrom = (value: JwtExpiresIn): Date => {
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     if (!Number.isFinite(value) || value <= 0) {
       throw new AppError(
         503,
-        'Invalid JWT expiration configuration.',
-        'AUTH_CONFIGURATION_ERROR'
+        "Invalid JWT expiration configuration.",
+        "AUTH_CONFIGURATION_ERROR",
       );
     }
 
@@ -149,8 +149,8 @@ const expiresAtFrom = (value: JwtExpiresIn): Date => {
   if (!match) {
     throw new AppError(
       503,
-      'JWT expiration must use seconds, minutes, hours, or days.',
-      'AUTH_CONFIGURATION_ERROR'
+      "JWT expiration must use seconds, minutes, hours, or days.",
+      "AUTH_CONFIGURATION_ERROR",
     );
   }
 
@@ -168,8 +168,8 @@ const expiresAtFrom = (value: JwtExpiresIn): Date => {
   if (!Number.isFinite(durationMs) || durationMs <= 0) {
     throw new AppError(
       503,
-      'Invalid JWT expiration configuration.',
-      'AUTH_CONFIGURATION_ERROR'
+      "Invalid JWT expiration configuration.",
+      "AUTH_CONFIGURATION_ERROR",
     );
   }
 
@@ -182,10 +182,13 @@ const expiresAtFrom = (value: JwtExpiresIn): Date => {
 
 const issueTokens = async (
   user: UserDocument,
-  session?: ClientSession
+  session?: ClientSession,
 ): Promise<AuthTokens> => {
   const userId = user._id.toString();
-  logInfo('auth.tokens.issue.started', { userId, hasSession: Boolean(session) });
+  logInfo("auth.tokens.issue.started", {
+    userId,
+    hasSession: Boolean(session),
+  });
 
   const accessToken = jwt.sign(
     {
@@ -197,7 +200,7 @@ const issueTokens = async (
     {
       subject: userId,
       expiresIn: ACCESS_EXPIRES_IN,
-    }
+    },
   );
 
   const jti = crypto.randomUUID();
@@ -206,13 +209,13 @@ const issueTokens = async (
   const refreshToken = jwt.sign(
     {
       jti,
-      type: 'refresh',
+      type: "refresh",
     },
     refreshSecret(),
     {
       subject: userId,
       expiresIn: REFRESH_EXPIRES_IN,
-    }
+    },
   );
 
   const refreshTokenDocument = new RefreshTokens({
@@ -227,7 +230,10 @@ const issueTokens = async (
     await refreshTokenDocument.save();
   }
 
-  logInfo('auth.tokens.issue.completed', { userId, expiresIn: ACCESS_EXPIRES_IN });
+  logInfo("auth.tokens.issue.completed", {
+    userId,
+    expiresIn: ACCESS_EXPIRES_IN,
+  });
 
   return {
     accessToken,
@@ -241,9 +247,12 @@ const issueTokens = async (
 // --------------------------------------------------
 
 export async function registerUser(
-  input: RegisterUserInput
+  input: RegisterUserInput,
 ): Promise<{ user: PublicUser; tokens: AuthTokens }> {
-  logInfo('auth.register.started', { email: input.email, hasDepartment: Boolean(input.department) });
+  logInfo("auth.register.started", {
+    email: input.email,
+    hasDepartment: Boolean(input.department),
+  });
   const name = input.name.trim();
   const normalizedEmail = input.email.trim().toLowerCase();
   const department = input.department?.trim();
@@ -254,21 +263,16 @@ export async function registerUser(
     input.password.length < 8
   ) {
     throw new AuthError(
-      'Name, a valid email, and a password of at least 8 characters are required.',
-      400
+      "Name, a valid email, and a password of at least 8 characters are required.",
+      400,
     );
   }
 
-  const passwordHash = await bcrypt.hash(
-    input.password,
-    BCRYPT_ROUNDS
-  );
+  const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
 
   const session = await mongoose.startSession();
 
-  let result:
-    | { user: UserDocument; tokens: AuthTokens }
-    | undefined;
+  let result: { user: UserDocument; tokens: AuthTokens } | undefined;
 
   try {
     await session.withTransaction(async () => {
@@ -278,25 +282,28 @@ export async function registerUser(
             name,
             email: normalizedEmail,
             passwordHash,
-            role: input.role ?? 'employee',
+            role: input.role ?? "employee",
             department: department || undefined,
           },
         ],
-        { session }
+        { session },
       );
 
       result = {
         user,
         tokens: await issueTokens(user, session),
       };
-      logInfo('auth.register.user_created', { userId: user._id.toString(), email: normalizedEmail });
+      logInfo("auth.register.user_created", {
+        userId: user._id.toString(),
+        email: normalizedEmail,
+      });
     });
 
     if (!result) {
       throw new AppError(
         503,
-        'Registration could not be completed.',
-        'REGISTRATION_FAILED'
+        "Registration could not be completed.",
+        "REGISTRATION_FAILED",
       );
     }
 
@@ -305,17 +312,17 @@ export async function registerUser(
       tokens: result.tokens,
     };
   } catch (error: unknown) {
-    logError('auth.register.failed', { email: normalizedEmail, ...errorMetadata(error) });
+    logError("auth.register.failed", {
+      email: normalizedEmail,
+      ...errorMetadata(error),
+    });
     if (
-      typeof error === 'object' &&
+      typeof error === "object" &&
       error !== null &&
-      'code' in error &&
+      "code" in error &&
       error.code === 11000
     ) {
-      throw new AuthError(
-        'An account with that email already exists.',
-        409
-      );
+      throw new AuthError("An account with that email already exists.", 409);
     }
 
     throw error;
@@ -330,10 +337,10 @@ export async function registerUser(
 
 export async function loginUser(
   email: string,
-  password: string
+  password: string,
 ): Promise<{ user: PublicUser; tokens: AuthTokens }> {
   const normalizedEmail = email.trim().toLowerCase();
-  logInfo('auth.login.started', { email: normalizedEmail });
+  logInfo("auth.login.started", { email: normalizedEmail });
 
   const user = await Users.findOne({
     email: normalizedEmail,
@@ -347,15 +354,18 @@ export async function loginUser(
       ? await bcrypt.compare(password, user.passwordHash)
       : false;
   } catch {
-    throw new AuthError('Invalid email or password.', 401);
+    throw new AuthError("Invalid email or password.", 401);
   }
 
   if (!user || !valid) {
-    logInfo('auth.login.rejected', { email: normalizedEmail, reason: 'invalid_credentials' });
-    throw new AuthError('Invalid email or password.', 401);
+    logInfo("auth.login.rejected", {
+      email: normalizedEmail,
+      reason: "invalid_credentials",
+    });
+    throw new AuthError("Invalid email or password.", 401);
   }
 
-  logInfo('auth.login.user_verified', { userId: user._id.toString() });
+  logInfo("auth.login.user_verified", { userId: user._id.toString() });
 
   const session = await mongoose.startSession();
 
@@ -373,8 +383,8 @@ export async function loginUser(
     if (!tokens) {
       throw new AppError(
         503,
-        'Login could not be completed.',
-        'AUTH_SERVICE_UNAVAILABLE'
+        "Login could not be completed.",
+        "AUTH_SERVICE_UNAVAILABLE",
       );
     }
 
@@ -383,7 +393,10 @@ export async function loginUser(
       tokens,
     };
   } catch (error: unknown) {
-    logError('auth.login.failed', { userId: user._id.toString(), ...errorMetadata(error) });
+    logError("auth.login.failed", {
+      userId: user._id.toString(),
+      ...errorMetadata(error),
+    });
     throw error;
   } finally {
     await session.endSession();
@@ -394,32 +407,27 @@ export async function loginUser(
 // Refresh access token
 // --------------------------------------------------
 
-export async function refreshAccessToken(
-  token: string
-): Promise<AuthTokens> {
-  logInfo('auth.refresh.started');
+export async function refreshAccessToken(token: string): Promise<AuthTokens> {
+  logInfo("auth.refresh.started");
   let payload: RefreshJwtPayload;
 
   try {
     const decoded = jwt.verify(token, refreshSecret());
     if (!isRefreshJwtPayload(decoded)) {
-      throw new Error('Invalid refresh token.');
+      throw new Error("Invalid refresh token.");
     }
     payload = decoded;
   } catch {
-    throw new AuthError(
-      'Invalid or expired refresh token.',
-      401
-    );
+    throw new AuthError("Invalid or expired refresh token.", 401);
   }
 
   if (
-    payload.type !== 'refresh' ||
+    payload.type !== "refresh" ||
     !payload.sub ||
     !payload.jti ||
     !Types.ObjectId.isValid(payload.sub)
   ) {
-    throw new AuthError('Invalid refresh token.', 401);
+    throw new AuthError("Invalid refresh token.", 401);
   }
 
   const tokenHash = hashRefreshToken(token);
@@ -432,10 +440,7 @@ export async function refreshAccessToken(
   });
 
   if (!stored) {
-    throw new AuthError(
-      'Invalid or expired refresh token.',
-      401
-    );
+    throw new AuthError("Invalid or expired refresh token.", 401);
   }
 
   const user = await Users.findOne({
@@ -444,7 +449,7 @@ export async function refreshAccessToken(
   });
 
   if (!user) {
-    throw new AuthError('User account is inactive.', 401);
+    throw new AuthError("User account is inactive.", 401);
   }
 
   const session = await mongoose.startSession();
@@ -468,14 +473,11 @@ export async function refreshAccessToken(
         {
           new: false,
           session,
-        }
+        },
       );
 
       if (!claimed) {
-        throw new AuthError(
-          'Invalid or expired refresh token.',
-          401
-        );
+        throw new AuthError("Invalid or expired refresh token.", 401);
       }
 
       tokens = await issueTokens(user, session);
@@ -484,26 +486,24 @@ export async function refreshAccessToken(
         { _id: stored._id },
         {
           $set: {
-            replacedByTokenHash: hashRefreshToken(
-              tokens.refreshToken
-            ),
+            replacedByTokenHash: hashRefreshToken(tokens.refreshToken),
           },
         },
-        { session }
+        { session },
       );
     });
 
     if (!tokens) {
       throw new AppError(
         503,
-        'Token refresh could not be completed.',
-        'AUTH_SERVICE_UNAVAILABLE'
+        "Token refresh could not be completed.",
+        "AUTH_SERVICE_UNAVAILABLE",
       );
     }
 
     return tokens;
   } catch (error: unknown) {
-    logError('auth.refresh.failed', errorMetadata(error));
+    logError("auth.refresh.failed", errorMetadata(error));
     throw error;
   } finally {
     await session.endSession();
@@ -514,10 +514,8 @@ export async function refreshAccessToken(
 // Logout / revoke refresh token
 // --------------------------------------------------
 
-export async function revokeRefreshToken(
-  token: string
-): Promise<void> {
-  logInfo('auth.logout.started');
+export async function revokeRefreshToken(token: string): Promise<void> {
+  logInfo("auth.logout.started");
   await RefreshTokens.updateOne(
     {
       tokenHash: hashRefreshToken(token),
@@ -525,23 +523,21 @@ export async function revokeRefreshToken(
     },
     {
       $set: { revokedAt: new Date() },
-    }
+    },
   );
-  logInfo('auth.logout.completed');
+  logInfo("auth.logout.completed");
 }
 
 // --------------------------------------------------
 // Verify access token
 // --------------------------------------------------
 
-export const verifyAccessToken = (
-  token: string
-): JwtPayload => {
+export const verifyAccessToken = (token: string): JwtPayload => {
   try {
     const decoded = jwt.verify(token, accessSecret());
 
     if (!isAccessJwtPayload(decoded)) {
-      throw new Error('Invalid token.');
+      throw new Error("Invalid token.");
     }
 
     return decoded;
@@ -550,9 +546,6 @@ export const verifyAccessToken = (
       throw error;
     }
 
-    throw new AuthError(
-      'Invalid or expired access token.',
-      401
-    );
+    throw new AuthError("Invalid or expired access token.", 401);
   }
 };
