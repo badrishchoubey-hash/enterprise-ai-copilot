@@ -30,6 +30,9 @@ export function setAuthCookies(
 export async function getRefreshToken() {
   return (await cookies()).get(refreshCookie)?.value;
 }
+export async function getAccessToken() {
+  return (await cookies()).get(accessCookie)?.value;
+}
 export async function getRoleCookie() {
   return (await cookies()).get(roleCookie)?.value;
 }

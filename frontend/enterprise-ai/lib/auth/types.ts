@@ -5,6 +5,17 @@ export interface AuthUser {
   role: "employee" | "support_agent" | "admin";
   department?: string;
 }
+export interface UserProfile extends AuthUser {
+  isActive: boolean;
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface UserProfileResponse {
+  success: boolean;
+  message: string;
+  data: UserProfile;
+}
 export interface AuthResponse {
   user: AuthUser;
   tokens: {

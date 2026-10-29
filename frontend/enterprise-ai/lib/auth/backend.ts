@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { AuthResponse } from "./types";
+import type { AuthResponse, UserProfileResponse } from "./types";
 const backendAuth = axios.create({
   baseURL: process.env.BACKEND_URL ?? "http://localhost:5000/api",
   timeout: 10_000,
@@ -25,6 +25,13 @@ export async function backendRefresh(refreshToken: string) {
 }
 export async function backendLogout(refreshToken: string) {
   await backendAuth.post("/auth/logout", { refreshToken });
+}
+export async function backendGetProfile(accessToken: string) {
+  const { data } = await backendAuth.get<UserProfileResponse>(
+    "/users/profile",
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  return data;
 }
 export function backendError(error: unknown) {
   if (axios.isAxiosError(error))

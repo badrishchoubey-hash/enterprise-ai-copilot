@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { connectDB } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { requestLogger } from "./middleware/requestLogger.js";
@@ -43,6 +44,7 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(requestLogger);
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
 
 // Health Check Endpoint
 app.get("/health", (req: Request, res: Response) => {
