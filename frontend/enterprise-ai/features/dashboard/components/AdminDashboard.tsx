@@ -15,7 +15,11 @@ export default function AdminDashboard() {
   const [uploadOpen, setUploadOpen] = useState(false);
   return (
     <div className="flex min-h-screen bg-[#f7f8fc] text-[#182230]">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} isAdmin={true}/>
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        isAdmin={true}
+      />
       <main className="min-w-0 flex-1 pt-[86px]">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
         <div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8">

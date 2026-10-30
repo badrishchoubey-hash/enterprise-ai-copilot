@@ -27,10 +27,9 @@ export async function backendLogout(refreshToken: string) {
   await backendAuth.post("/auth/logout", { refreshToken });
 }
 export async function backendGetProfile(accessToken: string) {
-  const { data } = await backendAuth.get<UserProfileResponse>(
-    "/users/profile",
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const { data } = await backendAuth.get<UserProfileResponse>("/user/profile", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   return data;
 }
 export function backendError(error: unknown) {

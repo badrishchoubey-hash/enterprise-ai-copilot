@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Button from "@/components/ui/button/button";
+import Shimmer from "@/components/ui/Shimmer";
 import { signOut } from "@/services/api/auth";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearProfile, fetchProfile } from "@/store/authSlice";
@@ -58,24 +59,25 @@ export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
 
   const workspaceIsAdmin = profile?.role === "admin" || (!profile && isAdmin);
   const displayName = profile?.name ?? (isAdmin ? "Admin" : "Employee");
-  const displayRole = profile?.role === "admin"
-    ? "Administrator"
-    : profile?.role === "support_agent"
-      ? "Support agent"
-      : "Employee";
-  const initials = profile?.name
-    ?.split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || (isAdmin ? "AD" : "EU");
+  const displayRole =
+    profile?.role === "admin"
+      ? "Administrator"
+      : profile?.role === "support_agent"
+        ? "Support agent"
+        : "Employee";
+  const initials =
+    profile?.name
+      ?.split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || (isAdmin ? "AD" : "EU");
 
   return (
-<header
-  className={`fixed inset-x-0 top-0 z-20 flex h-[86px] items-center justify-between border-b border-[#e8eaf1] bg-white px-5 sm:px-8 ${
-  workspaceIsAdmin ? "lg:left-[248px]" : "lg:left-0"
-  }`}
->      <div className="flex items-center gap-3">
+    <header
+      className="fixed inset-x-0 top-0 z-20 flex h-[86px] items-center justify-between border-b border-[#e8eaf1] bg-white px-5 sm:px-8"
+    >
+      <div className="flex items-center gap-3">
         <Button variant="icon" onClick={onOpenSidebar} className="lg:hidden">
           <Menu size={21} />
         </Button>
@@ -83,8 +85,12 @@ export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
           <p className="text-[11px] font-semibold uppercase tracking-[.16em] text-[#9ca5b2]">
             {workspaceIsAdmin ? "Admin workspace" : "Employee workspace"}
           </p>
-          <h1 className="mt-1 text-lg font-bold text-[#263244]">
-            {profile ? `Welcome back, ${profile.name}` : workspaceIsAdmin ? "Admin workspace" : "Welcome back"}{" "}
+          <h1 className="mt-1 text-lg font-bold text-[#263244] pl-[250px]">
+            {profile
+              ? `Welcome back, ${profile.name}`
+              : workspaceIsAdmin
+                ? "Admin workspace"
+                : "Welcome back"}{" "}
             <span className="text-[#f2ab54]">✦</span>
           </h1>
         </div>
@@ -123,7 +129,9 @@ export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
               className="absolute right-0 top-12 z-50 w-52 rounded-2xl border border-[#e7e9f0] bg-white p-2 shadow-xl shadow-[#1b2540]/10"
             >
               <div className="border-b border-[#eef0f4] px-3 py-2">
-                <p className="text-xs font-bold text-[#303a4a]">{displayName}</p>
+                <p className="text-xs font-bold text-[#303a4a]">
+                  {displayName}
+                </p>
                 <p className="mt-0.5 text-[10px] text-[#8a94a4]">
                   {displayRole}
                 </p>

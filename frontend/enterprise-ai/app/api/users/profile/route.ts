@@ -16,14 +16,16 @@ export async function GET() {
     return NextResponse.json(await backendGetProfile(accessToken));
   } catch (error) {
     const response = backendError(error);
-    const status = typeof error === "object" && error !== null &&
+    const status =
+      typeof error === "object" &&
+      error !== null &&
       "response" in error &&
       typeof error.response === "object" &&
       error.response !== null &&
       "status" in error.response &&
       typeof error.response.status === "number"
-      ? error.response.status
-      : 500;
+        ? error.response.status
+        : 500;
     return NextResponse.json(response, { status });
   }
 }

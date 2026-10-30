@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { backendError, backendRefresh } from "@/lib/auth/backend";
-import { getRefreshToken, getRoleCookie, setAuthCookies } from "@/lib/auth/cookies";
+import {
+  getRefreshToken,
+  getRoleCookie,
+  setAuthCookies,
+} from "@/lib/auth/cookies";
 export async function POST() {
   const refreshToken = await getRefreshToken();
   if (!refreshToken)

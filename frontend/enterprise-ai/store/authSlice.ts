@@ -50,7 +50,9 @@ const authSlice = createSlice({
       })
       .addCase(fetchProfile.rejected, (state, action) => {
         state.status = "failed";
-        state.error = (action.payload as string | undefined) ?? "Unable to load your profile.";
+        state.error =
+          (action.payload as string | undefined) ??
+          "Unable to load your profile.";
       });
   },
 });

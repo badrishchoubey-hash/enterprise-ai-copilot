@@ -1,15 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import { BookOpen, MessageSquare, Search } from "lucide-react";
 import Button from "@/components/ui/button/button";
 import Input from "@/components/ui/input/input";
 import Header from "@/components/layout/Header/Header";
+import Sidebar from "@/components/layout/Sidebar/Sidebar";
 
 export default function EmployeeDashboard() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-[#f7f8fc] pt-[86px]">
-      <Header isAdmin={false} onOpenSidebar={() => undefined} />
+    <div className="flex min-h-screen bg-[#f7f8fc] pt-[86px]">
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        isAdmin={true}
+      />
       <main className="mx-auto px-5 py-8 sm:px-8">
+        <Header isAdmin={false} onOpenSidebar={() => undefined} />
         <p className="text-[11px] font-semibold uppercase tracking-[.16em] text-[#9ca5b2]">
           Knowledge workspace
         </p>
