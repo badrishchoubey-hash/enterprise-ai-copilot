@@ -1,10 +1,15 @@
 import axios from "axios";
 import type { AuthResponse, UserProfileResponse } from "./types";
+const defaultBackendUrl =
+  process.env.NODE_ENV === "production"
+    ? "https://enterprise-ai-copilot-7gda.vercel.app/api"
+    : "http://localhost:5000/api";
+
 const backendAuth = axios.create({
   baseURL:
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
-    "http://localhost:5000/api",
+    defaultBackendUrl,
   timeout: 10_000,
   headers: { "Content-Type": "application/json" },
 });

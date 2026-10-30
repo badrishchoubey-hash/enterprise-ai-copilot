@@ -25,13 +25,27 @@ app.use(rateLimit());
 
 // Security & Performance Fix (S5122 & S7776): Use a Set for O(1) CORS origin lookups
 const allowedOrigins = new Set<string>([
-  process.env.FRONTEND_URL || "http://localhost:3000",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://enterprise-ai-copilot-ochre.vercel.app",
 ]);
+
+if (process.env.FRONTEND_URL) {
+  process.env.FRONTEND_URL.split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean)
+    .forEach((origin) => allowedOrigins.add(origin));
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin)) {
+      const cleanOrigin = origin ? origin.replace(/\/$/, "") : "";
+      if (
+        !origin ||
+        allowedOrigins.has(cleanOrigin) ||
+        /^https:\/\/enterprise-ai-copilot.*\.vercel\.app$/.test(cleanOrigin)
+      ) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -45,19 +59,36 @@ app.use(
 
 app.use(express.json({ limit: "1mb" }));
 app.use(requestLogger);
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
 
-// Health Check Endpoint
-app.get("/health", (req: Request, res: Response) => {
+// Ensure MongoDB is connected for serverless invocations
+app.use(async (_req, _res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Root & Health Check Endpoints
+app.get("/", (_req: Request, res: Response) => {
   res
     .status(200)
     .json({ status: "OK", message: "OmniMind Backend API is operational" });
 });
 
+app.get("/health", (_req: Request, res: Response) => {
+  res
+    .status(200)
+    .json({ status: "OK", message: "OmniMind Backend API is operational" });
+});
+
+app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
+
 app.use(errorHandler);
 
-// Connect to MongoDB and start Express server
+// Connect to MongoDB and start Express server for standalone/local execution
 const startServer = async (): Promise<void> => {
   await connectDB();
 
@@ -66,8 +97,11 @@ const startServer = async (): Promise<void> => {
   });
 };
 
-// Fix SonarQube S9383: Catch unhandled promise rejections at top-level execution
-startServer().catch((error: unknown) => {
-  console.error("❌ [server]: Failed to start server:", error);
-  process.exit(1);
-});
+if (process.env.VERCEL !== "1") {
+  startServer().catch((error: unknown) => {
+    console.error("❌ [server]: Failed to start server:", error);
+    process.exit(1);
+  });
+}
+
+export default app;

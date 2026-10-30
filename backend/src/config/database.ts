@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 export const connectDB = async (): Promise<void> => {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
+
   // MONGODB_URI is the canonical setting. DATABASE_URL is retained as a
   // compatibility fallback for existing local environments that already hold
   // a MongoDB Atlas URI under that name.
