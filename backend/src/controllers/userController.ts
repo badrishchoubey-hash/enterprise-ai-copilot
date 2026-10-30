@@ -24,17 +24,11 @@ export async function getMyProfile(
     const user = await getUserProfile(userId);
 
     if (!user) {
-      next(
-        new AppError(
-          404,
-          "User profile not found.",
-          "USER_NOT_FOUND",
-        ),
-      );
+      next(new AppError(404, "User profile not found.", "USER_NOT_FOUND"));
       return;
     }
 
-    res.type('application/json').status(200).json({
+    res.type("application/json").status(200).json({
       success: true,
       message: "User profile fetched successfully.",
       data: user,

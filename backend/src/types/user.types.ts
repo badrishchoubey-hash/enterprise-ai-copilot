@@ -1,4 +1,3 @@
-
 import type { UserRole } from "./auth.types.js";
 
 export interface UserProfile {
