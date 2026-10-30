@@ -48,4 +48,3 @@ export default function Shimmer({
   // Fallback – single line
   return <div className={`${base} h-4 w-full`} />;
 }
-

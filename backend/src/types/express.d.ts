@@ -1,8 +1,12 @@
 import type { JwtPayload } from "./auth.types.js";
 
-declare module "express-serve-static-core" {
-  interface Request {
-    user?: JwtPayload;
-    requestId?: string;
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JwtPayload;
+      requestId?: string;
+    }
   }
 }
+
+export {};

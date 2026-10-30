@@ -74,9 +74,7 @@ export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
       .join("") || (isAdmin ? "AD" : "EU");
 
   return (
-    <header
-      className="fixed inset-x-0 top-0 z-20 flex h-[86px] items-center justify-between border-b border-[#e8eaf1] bg-white px-5 sm:px-8"
-    >
+    <header className="fixed inset-x-0 top-0 z-20 flex h-[86px] items-center justify-between border-b border-[#e8eaf1] bg-white px-5 sm:px-8">
       <div className="flex items-center gap-3">
         <Button variant="icon" onClick={onOpenSidebar} className="lg:hidden">
           <Menu size={21} />

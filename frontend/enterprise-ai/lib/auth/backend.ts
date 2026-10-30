@@ -1,7 +1,10 @@
 import axios from "axios";
 import type { AuthResponse, UserProfileResponse } from "./types";
 const backendAuth = axios.create({
-  baseURL: process.env.BACKEND_URL ?? "http://localhost:5000/api",
+  baseURL:
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "http://localhost:5000/api",
   timeout: 10_000,
   headers: { "Content-Type": "application/json" },
 });

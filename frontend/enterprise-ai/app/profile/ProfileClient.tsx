@@ -20,15 +20,13 @@ export default function ProfileClient() {
   const formatDate = (value?: string) =>
     value
       ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
-        new Date(value),
-      )
+          new Date(value),
+        )
       : "Not available";
 
   return (
     <div className="flex min-h-screen bg-[#f7f8fc] text-[#182230]">
-
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
 
       <main className="min-w-0 flex-1 pt-[86px]">
         <Header onOpenSidebar={() => setSidebarOpen(true)} />
