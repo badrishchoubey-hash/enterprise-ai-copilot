@@ -103,7 +103,12 @@ export default function Sidebar({
             {links.map(({ label, href, icon: Icon }) => {
               const isActive =
                 pathname === href ||
-                (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+                (href !== "/dashboard" &&
+                  href !== "/documents" &&
+                  pathname.startsWith(`${href}/`)) ||
+                (href === "/documents" &&
+                  pathname.startsWith("/documents/") &&
+                  pathname !== "/documents/upload");
 
               return (
                 <Link

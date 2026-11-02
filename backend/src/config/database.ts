@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 
+let connectionPromise: Promise<void> | null = null;
+
 export const connectDB = async (): Promise<void> => {
-  if (mongoose.connection.readyState >= 1) {
+  if (mongoose.connection.readyState === 1) {
     return;
   }
+  if (connectionPromise) return connectionPromise;
 
   // MONGODB_URI is the canonical setting. DATABASE_URL is retained as a
   // compatibility fallback for existing local environments that already hold
@@ -38,17 +41,25 @@ export const connectDB = async (): Promise<void> => {
       )
     : configuredUri;
 
+  connectionPromise = mongoose
+    .connect(mongoUri, { serverSelectionTimeoutMS: 10_000 })
+    .then(() => {
+      console.log("MongoDB connected");
+    })
+    .catch((error: unknown) => {
+      console.error(
+        JSON.stringify({
+          code: "DATABASE_UNAVAILABLE",
+          message: "MongoDB connection failed.",
+        }),
+      );
+      throw error;
+    });
+
   try {
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10_000 });
-    console.log("MongoDB connected");
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        code: "DATABASE_UNAVAILABLE",
-        message: "MongoDB connection failed.",
-      }),
-    );
-    throw error;
+    await connectionPromise;
+  } finally {
+    connectionPromise = null;
   }
 };
 

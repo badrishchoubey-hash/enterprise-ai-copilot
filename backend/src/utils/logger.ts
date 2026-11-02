@@ -1,7 +1,7 @@
 type LogContext = Record<string, unknown>;
 
 const SENSITIVE_KEY =
-  /(password|secret|token|authorization|cookie|api[-_]?key|database[-_]?url|connection[-_]?string)/i;
+  /(password|secret|signature|token|authorization|cookie|api[-_]?key|database[-_]?url|connection[-_]?string)/i;
 const MAX_STRING_LENGTH = 1_000;
 
 export function redactForLog(value: unknown, depth = 0): unknown {
@@ -25,6 +25,15 @@ export function redactForLog(value: unknown, depth = 0): unknown {
     );
   }
   return value;
+}
+
+export function redactResponseForLog(value: unknown): unknown {
+  if (typeof value !== "string") return redactForLog(value);
+  try {
+    return redactForLog(JSON.parse(value) as unknown);
+  } catch {
+    return redactForLog(value);
+  }
 }
 
 const writeLog = (

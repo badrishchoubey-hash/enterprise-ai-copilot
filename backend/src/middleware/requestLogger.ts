@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import { logError, logInfo } from "../utils/logger.js";
+import { logError, logInfo, redactResponseForLog } from "../utils/logger.js";
 
 export const requestLogger: RequestHandler = (
   req: Request,
@@ -36,7 +36,7 @@ export const requestLogger: RequestHandler = (
       path: req.path,
       status: res.statusCode,
       durationMs: Math.round(durationMs),
-      response: responseBody,
+      response: redactResponseForLog(responseBody),
     });
   });
   res.once("close", () => {

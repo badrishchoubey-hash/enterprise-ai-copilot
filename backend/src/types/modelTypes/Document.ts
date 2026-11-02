@@ -4,10 +4,21 @@ export interface KnowledgeDocument extends Document {
   name: string;
   type: string;
   department?: string;
-  status: "uploading" | "processing" | "ready" | "failed" | "archived";
+  status:
+    | "uploaded"
+    | "uploading"
+    | "processing"
+    | "completed"
+    | "processed"
+    | "ready"
+    | "failed"
+    | "archived";
   fileHash: string;
   uploadedBy: Types.ObjectId;
   storageKey: string;
+  storageProvider?: "gridfs" | "cloudinary";
+  fileSize?: number;
+  mimeType?: string;
   pageCount?: number;
   errorMessage?: string;
   tenantId: Types.ObjectId;

@@ -45,11 +45,7 @@ export default function ProfileClient() {
               Manage your Nexa workspace identity and preferences.
             </p>
 
-            {status === "loading" && (
-              <p className="mt-8 rounded-xl bg-[#f7f8fc] p-4 text-sm text-[#808b9c]">
-                Loading your profile...
-              </p>
-            )}
+            {status === "loading" && <div className="mt-8 grid gap-4 sm:grid-cols-2" aria-label="Loading profile">{[1, 2, 3, 4, 5, 6].map((item) => <div key={item} className="h-24 rounded-xl shimmer" />)}</div>}
             {error && (
               <p
                 role="alert"

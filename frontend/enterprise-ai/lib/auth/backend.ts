@@ -15,7 +15,9 @@ const backendBaseUrl = /\/api$/i.test(trimmedBackendUrl)
 
 const backendAuth = axios.create({
   baseURL: backendBaseUrl,
-  timeout: 10_000,
+  // Leave room for the backend's 30-second request timeout to return a
+  // meaningful database error instead of closing the proxy request first.
+  timeout: Number(process.env.BACKEND_REQUEST_TIMEOUT_MS) || 35_000,
   headers: { "Content-Type": "application/json" },
 });
 export async function backendLogin(payload: unknown) {
@@ -81,4 +83,19 @@ export function backendStatus(error: unknown, fallback = 503): number {
   if (!axios.isAxiosError(error)) return fallback;
   const status = error.response?.status;
   return typeof status === "number" ? status : fallback;
+}
+
+export function backendAdminFetch(
+  path: string,
+  accessToken: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  return fetch(`${backendBaseUrl}/v1/admin/${path}`, {
+    ...init,
+    headers: {
+      ...Object.fromEntries(new Headers(init.headers).entries()),
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: "no-store",
+  });
 }

@@ -3,11 +3,20 @@ import { AppError } from "./appError.js";
 import { logError } from "../utils/logger.js";
 
 const isMongoError = (error: unknown): boolean => {
-  const value = error as { name?: string; code?: number };
+  const value = error as {
+    name?: string;
+    code?: number | string;
+    syscall?: string;
+    message?: string;
+  };
   return Boolean(
     value?.name?.startsWith("Mongo") ||
     value?.name === "MongooseError" ||
-    value?.code === 11000,
+    value?.code === 11000 ||
+    value?.syscall === "querySrv" ||
+    /querySrv\s+E(?:TIMEOUT|TIMEDOUT|CONNREFUSED|CONNRESET|NOTFOUND|AI_AGAIN)/i.test(
+      value?.message ?? "",
+    ),
   );
 };
 

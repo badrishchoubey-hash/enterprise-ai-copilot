@@ -17,7 +17,7 @@ const loginSchema = z.object({
 });
 const signupSchema = loginSchema.extend({
   name: z.string().min(2, "Enter your full name"),
-  role: z.enum(["employee", "support_agent", "admin"], {
+  role: z.enum(["employee", "support_agent"], {
     error: "Select a role",
   }),
   department: z.string().optional(),
@@ -27,7 +27,7 @@ type AuthValues = {
   email: string;
   password: string;
   name?: string;
-  role?: "employee" | "support_agent" | "admin";
+  role?: "employee" | "support_agent";
   department?: string;
 };
 
@@ -155,7 +155,6 @@ export default function AuthForm({ mode }: Props) {
                     options={[
                       { label: "Employee / User", value: "employee" },
                       { label: "Support agent", value: "support_agent" },
-                      { label: "Admin", value: "admin" },
                     ]}
                     error={errors.role?.message as string}
                     {...register("role")}

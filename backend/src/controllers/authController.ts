@@ -31,6 +31,14 @@ export async function register(
 
     const { name, email, password, role, department } = body;
 
+    if (role === "admin") {
+      res.status(403).json({
+        error: "Admin accounts must be created by an existing administrator.",
+        code: "ADMIN_ROLE_REQUIRES_ADMIN",
+      });
+      return;
+    }
+
     if (!isString(name) || !isString(email) || !isString(password)) {
       res.status(400).json({
         error: "name, email, and password are required.",

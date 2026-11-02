@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import path from "node:path";
 import { connectDB } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { rateLimit } from "./middleware/rateLimit.js";
@@ -85,23 +86,23 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/v1/admin", adminRoutes);
 
 app.use(errorHandler);
 
-// Connect to MongoDB and start Express server for standalone/local execution
-const startServer = async (): Promise<void> => {
-  await connectDB();
-
+// Start listening even if Atlas is temporarily unavailable. Database-backed
+// requests call connectDB through the middleware above and can recover later.
+const startServer = (): void => {
   app.listen(PORT, () => {
     console.log(`⚡️ [server]: Server running on http://localhost:${PORT}`);
+  });
+  void connectDB().catch((error: unknown) => {
+    console.error("❌ [server]: Initial MongoDB connection failed:", error);
   });
 };
 
 if (process.env.VERCEL !== "1") {
-  startServer().catch((error: unknown) => {
-    console.error("❌ [server]: Failed to start server:", error);
-    process.exit(1);
-  });
+  startServer();
 }
 
 export default app;

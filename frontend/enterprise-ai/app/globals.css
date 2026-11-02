@@ -20,6 +20,15 @@ body {
 * {
   box-sizing: border-box;
 }
+.shimmer {
+  background: linear-gradient(90deg, #eceef3 20%, #f7f8fa 45%, #eceef3 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
 button,
 input,
 select {

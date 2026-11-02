@@ -5,7 +5,7 @@ import { AppError } from "./appError.js";
 
 // Fixes S5693: Read limits from configurable environment variables to ensure safe, scalable content limits
 const MAX_FILE_BYTES =
-  Number(process.env.MAX_FILE_SIZE_BYTES) || 25 * 1024 * 1024; // Default 25MB
+  Number(process.env.MAX_FILE_SIZE_BYTES) || 100 * 1024 * 1024; // Default 100MB
 const MAX_FIELD_BYTES =
   Number(process.env.MAX_FIELD_SIZE_BYTES) || 1 * 1024 * 1024; // Default 1MB
 

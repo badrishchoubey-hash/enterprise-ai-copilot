@@ -17,7 +17,7 @@ export default function Shimmer({
    */
   variant?: "header" | "profile" | "default";
 }) {
-  const base = "animate-pulse bg-gray-200 rounded";
+  const base = "shimmer rounded";
 
   if (variant === "header") {
     return (
