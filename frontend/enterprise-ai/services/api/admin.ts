@@ -73,6 +73,13 @@ function findNestedRecord(
   matches: (record: Record<string, unknown>) => boolean,
   depth = 0,
 ): Record<string, unknown> | undefined {
+  if (typeof value === "string" && depth <= 8) {
+    try {
+      return findNestedRecord(JSON.parse(value) as unknown, matches, depth + 1);
+    } catch {
+      return undefined;
+    }
+  }
   if (
     depth > 8 ||
     !value ||
@@ -168,7 +175,9 @@ export async function getAdminDocuments(
     ? result.items
     : Array.isArray(result?.documents)
       ? result.documents
-      : [];
+      : Array.isArray(data)
+        ? data
+        : [];
   return {
     items: items as AdminDocument[],
     page: typeof result?.page === "number" ? result.page : filters.page ?? 1,
