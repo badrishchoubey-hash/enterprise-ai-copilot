@@ -235,7 +235,44 @@ export async function uploadAdminDocument(input: {
     visibility: input.visibility,
   });
 
-  const signed = signatureResponse.data;
+  const signed = findNestedRecord(
+    signatureResponse,
+    (record) =>
+      typeof record.apiKey === "string" &&
+      typeof record.uploadUrl === "string" &&
+      typeof record.signature === "string" &&
+      Boolean(record.params && typeof record.params === "object"),
+  ) as
+    | {
+        cloudName: string;
+        apiKey: string;
+        uploadUrl: string;
+        params: {
+          timestamp: number;
+          public_id: string;
+          type: string;
+          overwrite: boolean;
+        };
+        signature: string;
+        filename: string;
+      }
+    | undefined;
+
+  if (!signed) {
+    const responseError = findNestedRecord(
+      signatureResponse,
+      (record) =>
+        typeof record.error === "string" || typeof record.message === "string",
+    );
+    const message =
+      (typeof responseError?.error === "string" && responseError.error) ||
+      (typeof responseError?.message === "string" && responseError.message);
+    throw new Error(
+      message ||
+        "The configured backend did not return an upload signature. Check the frontend deployment's BACKEND_URL and the backend's CLOUDINARY_URL, then redeploy both services.",
+    );
+  }
+
   const formData = new FormData();
   formData.append("file", input.file);
   formData.append("api_key", signed.apiKey);
@@ -357,21 +394,6 @@ export async function getAdminAnalytics(days = 30): Promise<AdminAnalytics> {
   const { data } = await apiClient.get<unknown>(
     `/v1/admin/analytics?days=${days}`,
   );
-  const body = data as ApiResponse<unknown> & Record<string, unknown>;
-  const directPayload = (body.data ?? body) as Record<string, unknown>;
-  const isAnalyticsPayload = (record: Record<string, unknown>) =>
-    Boolean(record.users && typeof record.users === "object") &&
-    Boolean(record.documents && typeof record.documents === "object") &&
-    Boolean(record.usage && typeof record.usage === "object");
-  const payload =
-    isAnalyticsPayload(directPayload)
-      ? directPayload
-      : findNestedRecord(
-          data,
-            isAnalyticsPayload,
-          );
-  if (!payload) {
-    throw new Error("The analytics API returned an incomplete response.");
-  }
-  return payload as unknown as AdminAnalytics;
+  const response = data as ApiResponse<AdminAnalytics>;
+  return response.data;
 }
