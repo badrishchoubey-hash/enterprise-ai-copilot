@@ -2,7 +2,7 @@ import axios from "axios";
 import type { AuthResponse, UserProfileResponse } from "./types";
 const defaultBackendUrl =
   process.env.NODE_ENV === "production"
-    ? "https://enterprise-ai-copilot-7gda.vercel.app/api"
+    ? "https://enterprise-ai-copilot-32yw.onrender.com/api"
     : "http://localhost:5000/api";
 const configuredBackendUrl =
   process.env.BACKEND_URL ||

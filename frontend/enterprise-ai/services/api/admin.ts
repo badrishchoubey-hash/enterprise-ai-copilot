@@ -259,6 +259,10 @@ export async function uploadAdminDocument(input: {
     | undefined;
 
   if (!signed) {
+    const responseKeys =
+      signatureResponse && typeof signatureResponse === "object"
+        ? Object.keys(signatureResponse).join(", ")
+        : typeof signatureResponse;
     const responseError = findNestedRecord(
       signatureResponse,
       (record) =>
@@ -269,7 +273,7 @@ export async function uploadAdminDocument(input: {
       (typeof responseError?.message === "string" && responseError.message);
     throw new Error(
       message ||
-        "The configured backend did not return an upload signature. Check the frontend deployment's BACKEND_URL and the backend's CLOUDINARY_URL, then redeploy both services.",
+        `The configured backend did not return an upload signature (response: ${responseKeys || "no fields"}). Check the frontend deployment's BACKEND_URL and the backend's CLOUDINARY_URL, then redeploy both services.`,
     );
   }
 
