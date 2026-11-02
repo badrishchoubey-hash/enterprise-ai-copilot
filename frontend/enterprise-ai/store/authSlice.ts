@@ -1,18 +1,24 @@
-import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
+import {
+  createAsyncThunk,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import { getMyProfile } from "@/services/api/users";
-import type { UserProfile } from "@/lib/auth/types";
+import type { AuthUser, UserProfile } from "@/lib/auth/types";
 
-type ProfileStatus = "idle" | "loading" | "succeeded" | "failed";
+type ProfileStatus = "idle" | "loading" | "succeeded" | "failed" | "signedOut";
 interface AuthState {
   user: UserProfile | null;
   status: ProfileStatus;
   error: string | null;
+  profileRequestId: string | null;
 }
 
 const initialState: AuthState = {
   user: null,
   status: "idle",
   error: null,
+  profileRequestId: null,
 };
 
 export const fetchProfile = createAsyncThunk(
@@ -27,7 +33,7 @@ export const fetchProfile = createAsyncThunk(
   {
     condition: (_, { getState }) => {
       const state = getState() as { auth: AuthState };
-      return state.auth.status !== "loading" && !state.auth.user;
+      return state.auth.status === "idle";
     },
   },
 );
@@ -36,20 +42,47 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    clearProfile: () => initialState,
+    clearProfile: () => ({ ...initialState, status: "signedOut" as const }),
+    setAuthenticatedUser: (state, action: PayloadAction<AuthUser>) => {
+      state.user = {
+        ...action.payload,
+        isActive: true,
+        createdAt: "",
+        updatedAt: "",
+      };
+      state.status = "idle";
+      state.error = null;
+      state.profileRequestId = null;
+    },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchProfile.pending, (state) => {
+      .addCase(fetchProfile.pending, (state, action) => {
+        if (state.status === "signedOut") return;
         state.status = "loading";
         state.error = null;
+        state.profileRequestId = action.meta.requestId;
       })
       .addCase(fetchProfile.fulfilled, (state, action) => {
+        if (
+          state.status === "signedOut" ||
+          state.profileRequestId !== action.meta.requestId
+        ) {
+          return;
+        }
         state.status = "succeeded";
         state.user = action.payload;
+        state.profileRequestId = null;
       })
       .addCase(fetchProfile.rejected, (state, action) => {
+        if (
+          state.status === "signedOut" ||
+          state.profileRequestId !== action.meta.requestId
+        ) {
+          return;
+        }
         state.status = "failed";
+        state.profileRequestId = null;
         state.error =
           (action.payload as string | undefined) ??
           "Unable to load your profile.";
@@ -57,5 +90,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearProfile } = authSlice.actions;
+export const { clearProfile, setAuthenticatedUser } = authSlice.actions;
 export default authSlice.reducer;

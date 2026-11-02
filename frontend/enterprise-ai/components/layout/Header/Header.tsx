@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Button from "@/components/ui/button/button";
-import Shimmer from "@/components/ui/Shimmer";
 import { signOut } from "@/services/api/auth";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearProfile, fetchProfile } from "@/store/authSlice";
@@ -15,7 +14,7 @@ type HeaderProps = {
   readonly isAdmin?: boolean;
 };
 
-export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
+export default function Header({ onOpenSidebar, isAdmin = false }: HeaderProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((state) => state.auth.user);
@@ -24,7 +23,7 @@ export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!profile && profileStatus === "idle") {
+    if (profileStatus === "idle") {
       void dispatch(fetchProfile());
     }
   }, [dispatch, profile, profileStatus]);
@@ -57,7 +56,7 @@ export default function Header({ onOpenSidebar, isAdmin = true }: HeaderProps) {
     }
   };
 
-  const workspaceIsAdmin = profile?.role === "admin" || (!profile && isAdmin);
+  const workspaceIsAdmin = profile ? profile.role === "admin" : isAdmin;
   const displayName = profile?.name ?? (isAdmin ? "Admin" : "Employee");
   const displayRole =
     profile?.role === "admin"

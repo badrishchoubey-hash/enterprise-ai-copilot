@@ -128,9 +128,31 @@ export async function getAdminDocuments(
   filters: AdminDocumentFilters = {},
 ): Promise<AdminPageResult<AdminDocument>> {
   const { data } = await apiClient.get<
-    ApiResponse<AdminPageResult<AdminDocument>>
+    ApiResponse<AdminPageResult<AdminDocument>> | Record<string, unknown>
   >(`/v1/admin/documents${queryString(filters)}`);
-  return data.data;
+  const response = data as Record<string, unknown>;
+  const nested = response.data;
+  const result = (nested && typeof nested === "object" ? nested : response) as
+    Record<string, unknown>;
+  const items = Array.isArray(result.items)
+    ? result.items
+    : Array.isArray(result.documents)
+      ? result.documents
+      : Array.isArray(response.items)
+        ? response.items
+        : [];
+  return {
+    items: items as AdminDocument[],
+    page: typeof result.page === "number" ? result.page : filters.page ?? 1,
+    limit: typeof result.limit === "number" ? result.limit : filters.limit ?? 25,
+    total: typeof result.total === "number" ? result.total : items.length,
+    totalPages:
+      typeof result.totalPages === "number"
+        ? result.totalPages
+        : items.length > 0
+          ? 1
+          : 0,
+  };
 }
 
 export async function uploadAdminDocument(input: {

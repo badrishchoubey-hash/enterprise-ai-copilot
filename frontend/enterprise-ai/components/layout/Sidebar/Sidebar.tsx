@@ -45,7 +45,7 @@ const employeeLinks = [
 export default function Sidebar({
   open,
   onClose,
-  isAdmin = true,
+  isAdmin = false,
 }: SidebarProps) {
   const pathname = usePathname();
   const links = isAdmin ? adminLinks : employeeLinks;

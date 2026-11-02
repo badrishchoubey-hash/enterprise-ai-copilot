@@ -10,9 +10,10 @@ export default function ProfileClient() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const dispatch = useAppDispatch();
   const { user, status, error } = useAppSelector((state) => state.auth);
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
-    if (!user && status === "idle") {
+    if (status === "idle") {
       void dispatch(fetchProfile());
     }
   }, [dispatch, status, user]);
@@ -26,10 +27,17 @@ export default function ProfileClient() {
 
   return (
     <div className="flex min-h-screen bg-[#f7f8fc] text-[#182230]">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        isAdmin={isAdmin}
+      />
 
       <main className="min-w-0 flex-1 pt-[86px]">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
+        <Header
+          onOpenSidebar={() => setSidebarOpen(true)}
+          isAdmin={isAdmin}
+        />
 
         <div className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8">
           <section className="mx-auto max-w-2xl rounded-2xl border border-[#e8eaf1] bg-white p-8">

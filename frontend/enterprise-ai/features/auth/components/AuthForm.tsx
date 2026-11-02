@@ -10,6 +10,8 @@ import { signIn, signUp } from "@/services/api/auth";
 import Button from "@/components/ui/button/button";
 import Input from "@/components/ui/input/input";
 import Dropdown from "@/components/ui/dropdown/dropdown";
+import { useAppDispatch } from "@/store/hooks";
+import { setAuthenticatedUser } from "@/store/authSlice";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid work email"),
@@ -34,6 +36,7 @@ type AuthValues = {
 export default function AuthForm({ mode }: Props) {
   const isSignup = mode === "signup";
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [apiError, setApiError] = useState("");
   const {
@@ -57,6 +60,7 @@ export default function AuthForm({ mode }: Props) {
             department: values.department,
           })
         : await signIn({ email: values.email, password: values.password });
+      dispatch(setAuthenticatedUser(result.user));
       router.replace(
         result.user.role === "admin" ? "/dashboard" : "/workspace",
       );
