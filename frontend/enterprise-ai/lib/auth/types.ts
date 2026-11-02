@@ -28,6 +28,7 @@ export interface SessionResponse {
   user: AuthUser;
 }
 export interface AuthErrorResponse {
-  error?: string;
+  error?: string | { message?: string; code?: string };
   message?: string;
+  code?: string;
 }

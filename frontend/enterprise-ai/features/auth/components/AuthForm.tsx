@@ -62,8 +62,21 @@ export default function AuthForm({ mode }: Props) {
       );
       router.refresh();
     } catch (error) {
-      const message = (error as { response?: { data?: { error?: string } } })
-        .response?.data?.error;
+      const responseData = (
+        error as {
+          response?: {
+            data?: {
+              error?: string | { message?: string };
+              message?: string;
+            };
+          };
+        }
+      ).response?.data;
+      const responseError = responseData?.error;
+      const message =
+        (typeof responseError === "string" && responseError) ||
+        (typeof responseError === "object" && responseError?.message) ||
+        responseData?.message;
       setApiError(
         message ?? "We could not complete your request. Please try again.",
       );

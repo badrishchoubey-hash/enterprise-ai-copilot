@@ -4,12 +4,17 @@ const defaultBackendUrl =
   process.env.NODE_ENV === "production"
     ? "https://enterprise-ai-copilot-7gda.vercel.app/api"
     : "http://localhost:5000/api";
+const configuredBackendUrl =
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  defaultBackendUrl;
+const trimmedBackendUrl = configuredBackendUrl.replace(/\/+$/, "");
+const backendBaseUrl = /\/api$/i.test(trimmedBackendUrl)
+  ? trimmedBackendUrl
+  : `${trimmedBackendUrl}/api`;
 
 const backendAuth = axios.create({
-  baseURL:
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    defaultBackendUrl,
+  baseURL: backendBaseUrl,
   timeout: 10_000,
   headers: { "Content-Type": "application/json" },
 });
@@ -41,9 +46,39 @@ export async function backendGetProfile(accessToken: string) {
   return data;
 }
 export function backendError(error: unknown) {
-  if (axios.isAxiosError(error))
-    return {
-      error: error.response?.data?.error ?? "Authentication request failed.",
-    };
-  return { error: "Authentication service is unavailable." };
+  if (!axios.isAxiosError(error)) {
+    return { error: "Authentication service is unavailable." };
+  }
+
+  const responseData: unknown = error.response?.data;
+  if (typeof responseData !== "object" || responseData === null) {
+    return { error: "Authentication request failed." };
+  }
+
+  const payload = responseData as {
+    error?: unknown;
+    message?: unknown;
+    code?: unknown;
+  };
+  const nestedError =
+    typeof payload.error === "object" && payload.error !== null
+      ? (payload.error as { message?: unknown; code?: unknown })
+      : undefined;
+  const message =
+    (typeof payload.error === "string" && payload.error) ||
+    (typeof nestedError?.message === "string" && nestedError.message) ||
+    (typeof payload.message === "string" && payload.message) ||
+    "Authentication request failed.";
+  const code =
+    (typeof nestedError?.code === "string" && nestedError.code) ||
+    (typeof payload.code === "string" && payload.code) ||
+    undefined;
+
+  return { error: message, ...(code ? { code } : {}) };
+}
+
+export function backendStatus(error: unknown, fallback = 503): number {
+  if (!axios.isAxiosError(error)) return fallback;
+  const status = error.response?.status;
+  return typeof status === "number" ? status : fallback;
 }

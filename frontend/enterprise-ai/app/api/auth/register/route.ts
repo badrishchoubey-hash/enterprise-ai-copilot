@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { backendError, backendRegister } from "@/lib/auth/backend";
+import {
+  backendError,
+  backendRegister,
+  backendStatus,
+} from "@/lib/auth/backend";
 import { setAuthCookies } from "@/lib/auth/cookies";
 export async function POST(request: Request) {
   try {
@@ -14,7 +18,8 @@ export async function POST(request: Request) {
     );
     return response;
   } catch (error) {
-    const message = backendError(error);
-    return NextResponse.json(message, { status: 400 });
+    return NextResponse.json(backendError(error), {
+      status: backendStatus(error),
+    });
   }
 }

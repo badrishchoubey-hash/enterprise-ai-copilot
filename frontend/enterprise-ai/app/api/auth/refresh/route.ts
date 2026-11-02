@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { backendError, backendRefresh } from "@/lib/auth/backend";
+import {
+  backendError,
+  backendRefresh,
+  backendStatus,
+} from "@/lib/auth/backend";
 import {
   getRefreshToken,
   getRoleCookie,
@@ -21,6 +25,8 @@ export async function POST() {
     );
     return response;
   } catch (error) {
-    return NextResponse.json(backendError(error), { status: 401 });
+    return NextResponse.json(backendError(error), {
+      status: backendStatus(error),
+    });
   }
 }
