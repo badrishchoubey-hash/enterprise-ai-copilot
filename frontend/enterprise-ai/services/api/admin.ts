@@ -166,11 +166,16 @@ export async function getAdminDocuments(
   const { data } = await apiClient.get<
     ApiResponse<AdminPageResult<AdminDocument>> | Record<string, unknown>
   >(`/v1/admin/documents${queryString(filters)}`);
-  const result = findNestedRecord(
-    data,
-    (record) =>
-      Array.isArray(record.items) || Array.isArray(record.documents),
-  );
+  const body = data as ApiResponse<unknown> & Record<string, unknown>;
+  const directResult = (body.data ?? body) as Record<string, unknown>;
+  const result =
+    Array.isArray(directResult.items) || Array.isArray(directResult.documents)
+      ? directResult
+      : findNestedRecord(
+          data,
+          (record) =>
+            Array.isArray(record.items) || Array.isArray(record.documents),
+        );
   const items = Array.isArray(result?.items)
     ? result.items
     : Array.isArray(result?.documents)
@@ -352,13 +357,19 @@ export async function getAdminAnalytics(days = 30): Promise<AdminAnalytics> {
   const { data } = await apiClient.get<unknown>(
     `/v1/admin/analytics?days=${days}`,
   );
-  const payload = findNestedRecord(
-    data,
-    (record) =>
-      Boolean(record.users && typeof record.users === "object") &&
-      Boolean(record.documents && typeof record.documents === "object") &&
-      Boolean(record.usage && typeof record.usage === "object"),
-  );
+  const body = data as ApiResponse<unknown> & Record<string, unknown>;
+  const directPayload = (body.data ?? body) as Record<string, unknown>;
+  const isAnalyticsPayload = (record: Record<string, unknown>) =>
+    Boolean(record.users && typeof record.users === "object") &&
+    Boolean(record.documents && typeof record.documents === "object") &&
+    Boolean(record.usage && typeof record.usage === "object");
+  const payload =
+    isAnalyticsPayload(directPayload)
+      ? directPayload
+      : findNestedRecord(
+          data,
+            isAnalyticsPayload,
+          );
   if (!payload) {
     throw new Error("The analytics API returned an incomplete response.");
   }
