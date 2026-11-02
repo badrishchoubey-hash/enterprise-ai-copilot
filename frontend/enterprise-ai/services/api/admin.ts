@@ -68,6 +68,35 @@ const queryString = (filters: object) => {
   return query ? `?${query}` : "";
 };
 
+function findNestedRecord(
+  value: unknown,
+  matches: (record: Record<string, unknown>) => boolean,
+  depth = 0,
+): Record<string, unknown> | undefined {
+  if (
+    depth > 8 ||
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (matches(record)) return record;
+
+  for (const key of ["data", "result", "analytics", "payload"]) {
+    const found = findNestedRecord(record[key], matches, depth + 1);
+    if (found) return found;
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (["data", "result", "analytics", "payload"].includes(key)) continue;
+    const found = findNestedRecord(nested, matches, depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 export function getAdminErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const payload = error.response?.data as
@@ -130,24 +159,23 @@ export async function getAdminDocuments(
   const { data } = await apiClient.get<
     ApiResponse<AdminPageResult<AdminDocument>> | Record<string, unknown>
   >(`/v1/admin/documents${queryString(filters)}`);
-  const response = data as Record<string, unknown>;
-  const nested = response.data;
-  const result = (nested && typeof nested === "object" ? nested : response) as
-    Record<string, unknown>;
-  const items = Array.isArray(result.items)
+  const result = findNestedRecord(
+    data,
+    (record) =>
+      Array.isArray(record.items) || Array.isArray(record.documents),
+  );
+  const items = Array.isArray(result?.items)
     ? result.items
-    : Array.isArray(result.documents)
+    : Array.isArray(result?.documents)
       ? result.documents
-      : Array.isArray(response.items)
-        ? response.items
-        : [];
+      : [];
   return {
     items: items as AdminDocument[],
-    page: typeof result.page === "number" ? result.page : filters.page ?? 1,
-    limit: typeof result.limit === "number" ? result.limit : filters.limit ?? 25,
-    total: typeof result.total === "number" ? result.total : items.length,
+    page: typeof result?.page === "number" ? result.page : filters.page ?? 1,
+    limit: typeof result?.limit === "number" ? result.limit : filters.limit ?? 25,
+    total: typeof result?.total === "number" ? result.total : items.length,
     totalPages:
-      typeof result.totalPages === "number"
+      typeof result?.totalPages === "number"
         ? result.totalPages
         : items.length > 0
           ? 1
@@ -315,29 +343,15 @@ export async function getAdminAnalytics(days = 30): Promise<AdminAnalytics> {
   const { data } = await apiClient.get<unknown>(
     `/v1/admin/analytics?days=${days}`,
   );
-  let payload: unknown = data;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) break;
-    const record = payload as Record<string, unknown>;
-    if (record.data && typeof record.data === "object") {
-      payload = record.data;
-      continue;
-    }
-    if (record.analytics && typeof record.analytics === "object") {
-      payload = record.analytics;
-      continue;
-    }
-    break;
-  }
-
-  if (
-    !payload ||
-    typeof payload !== "object" ||
-    !("users" in payload) ||
-    !("documents" in payload) ||
-    !("usage" in payload)
-  ) {
+  const payload = findNestedRecord(
+    data,
+    (record) =>
+      Boolean(record.users && typeof record.users === "object") &&
+      Boolean(record.documents && typeof record.documents === "object") &&
+      Boolean(record.usage && typeof record.usage === "object"),
+  );
+  if (!payload) {
     throw new Error("The analytics API returned an incomplete response.");
   }
-  return payload as AdminAnalytics;
+  return payload as unknown as AdminAnalytics;
 }
