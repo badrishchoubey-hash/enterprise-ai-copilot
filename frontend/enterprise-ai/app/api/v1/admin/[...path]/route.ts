@@ -52,15 +52,17 @@ async function proxyAdminRequest(
       { method, headers, body },
     );
     const responseHeaders = new Headers({ "Cache-Control": "no-store" });
-    for (const name of [
-      "content-type",
-      "content-disposition",
-      "content-length",
-    ]) {
-      const value = upstream.headers.get(name);
-      if (value) responseHeaders.set(name, value);
+    const upstreamContentType = upstream.headers.get("content-type");
+    if (upstreamContentType) {
+      responseHeaders.set("content-type", upstreamContentType);
     }
-    return new NextResponse(upstream.body, {
+    const upstreamDisposition = upstream.headers.get("content-disposition");
+    if (upstreamDisposition) {
+      responseHeaders.set("content-disposition", upstreamDisposition);
+    }
+
+    const buffer = await upstream.arrayBuffer();
+    return new NextResponse(buffer, {
       status: upstream.status,
       headers: responseHeaders,
     });

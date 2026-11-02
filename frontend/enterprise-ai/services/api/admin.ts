@@ -163,9 +163,19 @@ export async function deactivateAdminUser(userId: string): Promise<AdminUser> {
 export async function getAdminDocuments(
   filters: AdminDocumentFilters = {},
 ): Promise<AdminPageResult<AdminDocument>> {
-  const { data } = await apiClient.get<
+  const { data: rawData } = await apiClient.get<
     ApiResponse<AdminPageResult<AdminDocument>> | Record<string, unknown>
   >(`/v1/admin/documents${queryString(filters)}`);
+  const data =
+    typeof rawData === "string"
+      ? (() => {
+          try {
+            return JSON.parse(rawData) as unknown;
+          } catch {
+            return rawData;
+          }
+        })()
+      : rawData;
   const body = data as ApiResponse<unknown> & Record<string, unknown>;
   const directResult = (body.data ?? body) as Record<string, unknown>;
   const result =
@@ -235,8 +245,19 @@ export async function uploadAdminDocument(input: {
     visibility: input.visibility,
   });
 
+  const parsedResponse =
+    typeof signatureResponse === "string"
+      ? (() => {
+          try {
+            return JSON.parse(signatureResponse) as unknown;
+          } catch {
+            return signatureResponse;
+          }
+        })()
+      : signatureResponse;
+
   const signed = findNestedRecord(
-    signatureResponse,
+    parsedResponse,
     (record) =>
       typeof record.apiKey === "string" &&
       typeof record.uploadUrl === "string" &&
