@@ -312,8 +312,32 @@ export async function getKnowledgeBaseSummary(): Promise<KnowledgeBaseSummary> {
 }
 
 export async function getAdminAnalytics(days = 30): Promise<AdminAnalytics> {
-  const { data } = await apiClient.get<ApiResponse<AdminAnalytics>>(
+  const { data } = await apiClient.get<unknown>(
     `/v1/admin/analytics?days=${days}`,
   );
-  return data.data;
+  let payload: unknown = data;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) break;
+    const record = payload as Record<string, unknown>;
+    if (record.data && typeof record.data === "object") {
+      payload = record.data;
+      continue;
+    }
+    if (record.analytics && typeof record.analytics === "object") {
+      payload = record.analytics;
+      continue;
+    }
+    break;
+  }
+
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    !("users" in payload) ||
+    !("documents" in payload) ||
+    !("usage" in payload)
+  ) {
+    throw new Error("The analytics API returned an incomplete response.");
+  }
+  return payload as AdminAnalytics;
 }
