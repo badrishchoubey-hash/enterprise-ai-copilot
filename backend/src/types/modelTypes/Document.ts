@@ -24,8 +24,12 @@ export interface KnowledgeDocument extends Document {
   totalChunks?: number;
   processedAt?: Date;
   processingHeartbeatAt?: Date;
+  processingProgress?: {
+    completedChunks: number;
+    totalChunks: number;
+    retryAt?: Date;
+  };
   errorMessage?: string;
-  tenantId: Types.ObjectId;
   visibility: "private" | "department" | "organization";
   createdAt: Date;
   updatedAt: Date;

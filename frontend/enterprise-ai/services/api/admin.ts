@@ -406,6 +406,15 @@ export async function retryAdminDocument(
   return data.data;
 }
 
+export async function reprocessUnindexedDocument(
+  documentId: string,
+): Promise<AdminDocument> {
+  const { data } = await apiClient.post<ApiResponse<AdminDocument>>(
+    `/v1/admin/documents/${encodeURIComponent(documentId)}/reprocess`,
+  );
+  return data.data;
+}
+
 export async function downloadAdminDocument(
   documentId: string,
 ): Promise<Blob | string> {

@@ -14,7 +14,6 @@ export const optionalText = (max: number) => ({
   maxlength: max,
 });
 export const accessFields = {
-  tenantId: { type: objectId(), required: true, ref: "Organizations" },
   department: optionalText(120),
   visibility: {
     type: String,

@@ -13,7 +13,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { requestTimeout } from "./middleware/requestTimeout.js";
-import { ensureOrganizationTenant } from "./services/organizationTenantService.js";
+import { logError, logInfo } from "./utils/logger.js";
 import {
   queuePendingUploadedDocuments,
   recoverInterruptedDocumentProcessing,
@@ -90,7 +90,6 @@ app.use(errorHandler);
 
 const startServer = async (): Promise<void> => {
   await connectDB();
-  await ensureOrganizationTenant();
   const interrupted = await recoverInterruptedDocumentProcessing();
   const queued = await queuePendingUploadedDocuments();
   if (interrupted || queued) {
@@ -99,10 +98,25 @@ const startServer = async (): Promise<void> => {
   const server = app.listen(PORT, () => {
     console.log(`[server]: Server running on http://localhost:${PORT}`);
   });
+  // A recently interrupted worker may not be stale yet when this process starts.
+  // Recheck later so it cannot remain in processing until another restart.
+  let recoveryRunning = false;
+  const recoveryTimer = setInterval(() => {
+    if (recoveryRunning) return;
+    recoveryRunning = true;
+    void recoverInterruptedDocumentProcessing()
+      .then((recovered) => {
+        if (recovered) logInfo("document.processing.recovered", { recovered });
+      })
+      .catch(() => logError("document.processing.recovery_failed"))
+      .finally(() => { recoveryRunning = false; });
+  }, 60_000);
+  recoveryTimer.unref();
   let shuttingDown = false;
   const shutdown = (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(recoveryTimer);
     console.log(`[server]: ${signal} received; draining requests`);
     server.close(() => {
       void waitForDocumentProcessing()

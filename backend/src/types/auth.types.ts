@@ -16,7 +16,6 @@ export interface JwtPayload extends AccessTokenClaims {
 }
 
 export interface AuthenticatedUserContext extends AccessTokenClaims {
-  tenantId: string;
 }
 
 export interface RefreshJwtPayload {

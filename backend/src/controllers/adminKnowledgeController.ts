@@ -15,6 +15,7 @@ import {
 import { recordAdminAudit } from "../utils/adminAudit.js";
 import {
   queueUploadedDocument,
+  reprocessUnindexedDocument,
   retryFailedDocument,
 } from "../services/documentProcessingService.js";
 
@@ -138,6 +139,26 @@ export async function retryAdminDocumentRoute(
     if (!document)
       throw new AppError(404, "Document not found.", "DOCUMENT_NOT_FOUND");
     await recordAdminAudit(req, "retry-processing", "document", document.id, {
+      status: document.status,
+    });
+    res.status(202).json({ success: true, data: document });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reprocessUnindexedDocumentRoute(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const document = await reprocessUnindexedDocument(
+      routeParam(req.params.documentId),
+    );
+    if (!document)
+      throw new AppError(404, "Document not found.", "DOCUMENT_NOT_FOUND");
+    await recordAdminAudit(req, "reprocess-unindexed", "document", document.id, {
       status: document.status,
     });
     res.status(202).json({ success: true, data: document });

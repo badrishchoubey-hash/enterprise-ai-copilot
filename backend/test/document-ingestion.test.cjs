@@ -126,11 +126,10 @@ test("Gemini chat model reads its separate key and applies factual defaults", ()
   }
 });
 
-test("vector retrieval prefilters tenant and role visibility, then rechecks document access", () => {
-  const tenantId = new mongoose.Types.ObjectId();
+test("vector retrieval prefilters role visibility, then rechecks document access", () => {
   const pipeline = buildVectorRetrievalPipeline(
     Array(768).fill(0.1),
-    { tenantId, role: "employee", department: "Engineering" },
+    { role: "employee", department: "Engineering" },
   );
   const stage = pipeline[0].$vectorSearch;
   assert.equal(stage.index, "document_vector_index");
@@ -138,40 +137,39 @@ test("vector retrieval prefilters tenant and role visibility, then rechecks docu
   assert.deepEqual(stage.queryVector, Array(768).fill(0.1));
   assert.deepEqual(stage.filter, {
     $and: [
-      {
-        $and: [
-          { tenantId },
-          { $or: [
-            { visibility: "organization" },
-            { visibility: "department", department: "Engineering" },
-          ] },
-        ],
-      },
+      { $or: [
+        { visibility: "organization" },
+        { visibility: "department", department: "Engineering" },
+      ] },
       { embeddingModel: getEmbeddingModelIdentifier() },
     ],
   });
+  const supportPipeline = buildVectorRetrievalPipeline(
+    Array(768).fill(0.1),
+    { role: "support_agent", department: "Engineering" },
+  );
+  assert.deepEqual(supportPipeline[0].$vectorSearch.filter, stage.filter);
+  assert.equal(JSON.stringify(stage.filter).includes('"private"'), false);
   assert.equal(pipeline.some((item) => item.$lookup?.from === "Documents"), true);
   assert.equal(pipeline.some((item) => item.$match?.$and?.some((filter) => filter.score?.$gte === 0.45)), true);
-  const adminPipeline = buildVectorRetrievalPipeline(Array(768).fill(0.1), { tenantId, role: "admin" });
+  const adminPipeline = buildVectorRetrievalPipeline(Array(768).fill(0.1), { role: "admin" });
   assert.deepEqual(adminPipeline[0].$vectorSearch.filter.$and, [
-    { tenantId },
     { embeddingModel: getEmbeddingModelIdentifier() },
   ]);
-  const noDepartmentPipeline = buildVectorRetrievalPipeline(Array(768).fill(0.1), { tenantId, role: "employee" });
+  const noDepartmentPipeline = buildVectorRetrievalPipeline(Array(768).fill(0.1), { role: "employee" });
   assert.deepEqual(noDepartmentPipeline[0].$vectorSearch.filter, {
     $and: [
-      { $and: [{ tenantId }, { visibility: "organization" }] },
+      { visibility: "organization" },
       { embeddingModel: getEmbeddingModelIdentifier() },
     ],
   });
   assert.throws(
-    () => buildVectorRetrievalPipeline([0.1], { tenantId, role: "employee" }),
+    () => buildVectorRetrievalPipeline([0.1], { role: "employee" }),
     { code: "EMBEDDING_DIMENSION_MISMATCH" },
   );
 });
 
 test("retrieval passes numeric query vectors and handles matching and empty results", async () => {
-  const tenantId = new mongoose.Types.ObjectId();
   const chunk = {
     _id: new mongoose.Types.ObjectId(),
     documentId: new mongoose.Types.ObjectId(),
@@ -185,7 +183,6 @@ test("retrieval passes numeric query vectors and handles matching and empty resu
       name: "HR_Work_From_Home_Policy.pdf",
       type: "pdf",
       status: "completed",
-      tenantId,
       visibility: "organization",
     },
   };
@@ -201,7 +198,7 @@ test("retrieval passes numeric query vectors and handles matching and empty resu
       return [chunk];
     },
   };
-  const access = { tenantId, role: "employee", department: "HR" };
+  const access = { role: "employee", department: "HR" };
   assert.deepEqual(await retrieveRelevantChunks("What is the remote work policy?", access, deps), [chunk]);
   assert.equal(captured[0].$vectorSearch.queryVector.length, 768);
   assert.equal(typeof captured[0].$vectorSearch.queryVector[0], "number");
@@ -269,7 +266,6 @@ test("grounded answer handoff returns only cited source metadata and exact fallb
       name: "HR_Work_From_Home_Policy.pdf",
       type: "pdf",
       status: "completed",
-      tenantId: new mongoose.Types.ObjectId(),
       visibility: "organization",
     },
   };
@@ -301,7 +297,6 @@ test("grounded answer handoff returns only cited source metadata and exact fallb
 });
 
 test("retrieved document evidence flows into the grounded model prompt", async () => {
-  const tenantId = new mongoose.Types.ObjectId();
   const retrieved = {
     _id: new mongoose.Types.ObjectId(),
     documentId: new mongoose.Types.ObjectId(),
@@ -312,12 +307,12 @@ test("retrieved document evidence flows into the grounded model prompt", async (
     score: 0.9,
     document: {
       _id: new mongoose.Types.ObjectId(), name: "Remote_Policy.pdf", type: "pdf",
-      status: "completed", tenantId, visibility: "organization",
+      status: "completed", visibility: "organization",
     },
   };
   const chunks = await retrieveRelevantChunks(
     "Can I work remotely?",
-    { tenantId, role: "employee" },
+    { role: "employee" },
     {
       async getStoredModels() { return [getEmbeddingModelIdentifier()]; },
       async embedQuery() { return Array(768).fill(0.02); },
@@ -345,7 +340,7 @@ test("LLM rate limits are reported safely and unknown model citations are discar
     score: 0.8,
     document: {
       _id: new mongoose.Types.ObjectId(), name: "policy.pdf", type: "pdf",
-      status: "completed", tenantId: new mongoose.Types.ObjectId(), visibility: "organization",
+      status: "completed", visibility: "organization",
     },
   };
   await assert.rejects(
@@ -409,7 +404,7 @@ test("ingestion batches mocked embeddings and persists vectorized chunks", async
   };
   const result = await ingestDocumentsIntoChunks(
     [new Document({ pageContent: "Company policy applies to all employees. Contact security for exceptions." , metadata: { pageNumber: 2 } })],
-    { documentId: "doc-1", tenantId: "tenant-1", embeddingModel: "mock", visibility: "organization", department: "IT" },
+    { documentId: "doc-1", embeddingModel: "mock", visibility: "organization", department: "IT" },
     embeddings,
     {
       async deleteForDocument(id) { deleted.push(id); },
@@ -420,7 +415,6 @@ test("ingestion batches mocked embeddings and persists vectorized chunks", async
   assert.equal(result.embeddingDimensions, 3);
   assert.equal(deleted[0], "doc-1");
   assert.ok(inserted.length > 0);
-  assert.equal(inserted[0].tenantId, "tenant-1");
   assert.equal(inserted[0].embeddingModel, "mock");
   assert.deepEqual(inserted[0].embedding, [inserted[0].content.length, 0.25, 0.5]);
   assert.equal(inserted[0].pageNumber, 2);
@@ -436,7 +430,7 @@ test("embedding failures clean partially inserted chunks before propagating", as
   await assert.rejects(
     ingestDocumentsIntoChunks(
       [new Document({ pageContent: "A document with content to embed." })],
-      { documentId: "doc-2", tenantId: "tenant-1", embeddingModel: "mock", visibility: "private" },
+      { documentId: "doc-2", embeddingModel: "mock", visibility: "private" },
       { async embedDocuments() { throw new Error("provider down"); } },
       writer,
     ),
@@ -456,4 +450,202 @@ test("streaming file storage computes a server-side SHA-256 and enforces size ca
     streamToTemporaryDocumentFile(Readable.from([data]), "txt", 2),
     /size limit/,
   );
+});
+
+test("Gemini document embeddings preserve order, document prefixes, and provider failures", async () => {
+  const oldProvider = process.env.EMBEDDING_PROVIDER;
+  const oldKey = process.env.GOOGLE_API_KEY;
+  const oldModel = process.env.EMBEDDING_MODEL;
+  process.env.EMBEDDING_PROVIDER = "gemini";
+  process.env.GOOGLE_API_KEY = "test-key";
+  process.env.EMBEDDING_MODEL = "gemini-embedding-2";
+  try {
+    const inputs = [];
+    const model = createEmbeddings();
+    model.maxBatchSize = 2;
+    const sizes = [];
+    model.batchClient.batchEmbedContents = async ({ requests }) => {
+      sizes.push(requests.length);
+      const texts = requests.map((request) => request.content.parts[0].text);
+      inputs.push(...texts);
+      assert.equal(requests[0].outputDimensionality, 768);
+      assert.equal(requests[0].taskType, undefined);
+      return { embeddings: texts.map((text) => ({ values: [text.length] })) };
+    };
+    assert.deepEqual(await model.embedDocuments(["a", "bb", "ccc"]), [[21], [22], [23]]);
+    assert.deepEqual(sizes, [2, 1]);
+    assert.deepEqual(inputs, ["title: none | text: a", "title: none | text: bb", "title: none | text: ccc"]);
+    assert.deepEqual(await model.embedDocuments([]), []);
+    const failure = Object.assign(new Error("provider rejected request"), { status: 400 });
+    model.batchClient.batchEmbedContents = async () => { throw failure; };
+    await assert.rejects(model.embedDocuments(["text"]), (error) => error === failure);
+  } finally {
+    for (const [key, value] of Object.entries({ EMBEDDING_PROVIDER: oldProvider, GOOGLE_API_KEY: oldKey, EMBEDDING_MODEL: oldModel })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("embedding errors distinguish exhausted quota from temporary throttling without exposing provider messages", () => {
+  const { toEmbeddingError } = require("../dist/services/embeddingErrorService.js");
+  const quota = toEmbeddingError(Object.assign(new Error("sensitive provider details"), { name: "RateLimitQuotaExhaustedError" }));
+  assert.equal(quota.code, "EMBEDDING_RATE_LIMITED");
+  assert.match(quota.message, /429/);
+  assert.doesNotMatch(quota.message, /sensitive/);
+  assert.equal(toEmbeddingError({ status: 429 }).code, "EMBEDDING_RATE_LIMITED");
+  assert.equal(toEmbeddingError({ response: { status: 429 } }).statusCode, 429);
+  assert.equal(toEmbeddingError(new Error("file error")), undefined);
+  const perMinute = {
+    name: "RateLimitQuotaExhaustedError",
+    errorDetails: [
+      { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId: "EmbedContentRequestsPerMinutePerProject" }] },
+      { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "42s" },
+    ],
+  };
+  assert.match(toEmbeddingError(perMinute).message, /Retry after 42s/);
+  assert.equal(toEmbeddingError(perMinute).code, "EMBEDDING_RATE_LIMITED");
+  assert.equal(toEmbeddingError({ name: "RateLimitQuotaExhaustedError", errorDetails: [
+    { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId: "EmbedContentRequestsPerDay" }] },
+  ] }).code, "EMBEDDING_QUOTA_EXHAUSTED");
+});
+
+test("embedding retry respects RetryInfo, caps attempts, and does not retry permanent failures", async () => {
+  const { withEmbeddingRetry } = require("../dist/services/embeddingRetryService.js");
+  const throttle = Object.assign(new Error("throttled"), { status: 429, errorDetails: [
+    { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "55s" },
+  ] });
+  const waits = [];
+  let calls = 0;
+  assert.equal(await withEmbeddingRetry(async () => {
+    if (++calls === 1) throw throttle;
+    return "vector";
+  }, async (ms) => { waits.push(ms); }), "vector");
+  assert.deepEqual(waits, [56000]);
+  calls = 0;
+  await assert.rejects(withEmbeddingRetry(async () => { calls++; throw throttle; }, async () => {}), (error) => error === throttle);
+  assert.equal(calls, 4);
+  for (const failure of [
+    Object.assign(new Error("auth"), { status: 401 }),
+    Object.assign(new Error("no hint"), { status: 429 }),
+    Object.assign(new Error("daily"), { status: 429, errorDetails: [...throttle.errorDetails,
+      { "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaId: "RequestsPerDay" }] },
+    ] }),
+  ]) {
+    await assert.rejects(withEmbeddingRetry(async () => { throw failure; }, async () => assert.fail("must not wait")), (error) => error === failure);
+  }
+});
+
+test("embedding retries share one allowance across document batches", async () => {
+  const { withEmbeddingRetry } = require("../dist/services/embeddingRetryService.js");
+  const throttle = Object.assign(new Error("throttled"), { status: 429, errorDetails: [
+    { "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "1s" },
+  ] });
+  const updates = [];
+  const budget = { remainingRetries: 1, async onRetry(ms) { updates.push(ms); } };
+  let calls = 0;
+  assert.equal(await withEmbeddingRetry(async () => {
+    if (++calls === 1) throw throttle;
+    return "first batch";
+  }, async () => {}, budget), "first batch");
+  assert.deepEqual(updates, [2000]);
+  assert.equal(budget.remainingRetries, 0);
+  calls = 0;
+  await assert.rejects(withEmbeddingRetry(async () => { calls++; throw throttle; }, async () => assert.fail("retry allowance must not reset"), budget), (error) => error === throttle);
+  assert.equal(calls, 1);
+});
+
+test("ingestion reports persisted progress and the total chunk count", async () => {
+  const progress = [];
+  const result = await ingestDocumentsIntoChunks(
+    [new Document({ pageContent: "Company security policy." })],
+    { documentId: "progress", embeddingModel: "mock", visibility: "private", async onProgress(done, total) { progress.push([done, total]); } },
+    { async embedDocuments(texts) { return texts.map(() => [0.1, 0.2]); } },
+    { async deleteForDocument() {}, async insertBatch() {} },
+  );
+  assert.deepEqual(progress, [[0, result.totalChunks], [result.totalChunks, result.totalChunks]]);
+});
+
+test("stale worker recovery clears progress and only targets expired processing heartbeats", async () => {
+  const Documents = require("../dist/models/Document.js").default;
+  const Chunks = require("../dist/models/DocumentChunk.js").default;
+  const { recoverInterruptedDocumentProcessing } = require("../dist/services/documentProcessingService.js");
+  const original = Documents.updateMany;
+  const originalFind = Documents.find;
+  const originalDelete = Chunks.deleteMany;
+  const originalTransaction = mongoose.connection.transaction;
+  const documentId = new mongoose.Types.ObjectId();
+  const session = {};
+  const calls = [];
+  mongoose.connection.transaction = async (work) => work(session);
+  Documents.find = () => ({ select() { return this; }, session(value) { assert.equal(value, session); return this; }, lean() { return this; }, async exec() { return [{ _id: documentId }]; } });
+  Chunks.deleteMany = (query) => {
+    assert.deepEqual(query.documentId.$in, [documentId]);
+    return { session(value) { assert.equal(value, session); return this; }, async exec() { calls.push("cleanup"); } };
+  };
+  let filter;
+  let update;
+  Documents.updateMany = (query, changes) => {
+    filter = query;
+    update = changes;
+    return { session(value) { assert.equal(value, session); return this; }, async exec() { calls.push("fail"); return { modifiedCount: 1 }; } };
+  };
+  try {
+    assert.equal(await recoverInterruptedDocumentProcessing(), 1);
+    assert.equal(filter.status, "processing");
+    assert.ok(Date.now() - filter.$or[0].processingHeartbeatAt.$lt.getTime() >= 300000);
+    assert.equal(update.$set.status, "failed");
+    assert.equal(update.$unset.processingProgress, 1);
+    assert.deepEqual(calls, ["cleanup", "fail"]);
+  } finally {
+    Documents.updateMany = original;
+    Documents.find = originalFind;
+    Chunks.deleteMany = originalDelete;
+    mongoose.connection.transaction = originalTransaction;
+  }
+});
+
+test("signature validation accepts a DOCX and rejects a generic ZIP disguised as DOCX", async (t) => {
+  const JSZip = require("jszip");
+  const { validateDocumentFileContent } = require("../dist/services/adminKnowledgeService.js");
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "docx-signature-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const docx = new JSZip();
+  docx.file("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  docx.file("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Support guide</w:t></w:r></w:p></w:body></w:document>');
+  const validPath = path.join(directory, "valid.docx");
+  await fs.writeFile(validPath, await docx.generateAsync({ type: "nodebuffer" }));
+  await validateDocumentFileContent(validPath, "docx");
+  assert.match((await loadDocumentFile(validPath, "docx", "guide.docx"))[0].pageContent, /Support guide/);
+  const zip = new JSZip();
+  zip.file("readme.txt", "This is not a Word document");
+  const invalidPath = path.join(directory, "fake.docx");
+  await fs.writeFile(invalidPath, await zip.generateAsync({ type: "nodebuffer" }));
+  await assert.rejects(validateDocumentFileContent(invalidPath, "docx"), { code: "INVALID_FILE_SIGNATURE" });
+});
+
+test("missing or unqueryable vector indexes produce a readiness error rather than empty evidence", async () => {
+  const { requireQueryableVectorIndex, buildVectorIndexDefinition } = require("../dist/services/vectorIndexService.js");
+  const { getVectorSearchConfig } = require("../dist/config/vectorSearch.js");
+  const name = getVectorSearchConfig().indexName;
+  await assert.rejects(requireQueryableVectorIndex(async () => []), { code: "VECTOR_INDEX_NOT_READY", statusCode: 503 });
+  await assert.rejects(requireQueryableVectorIndex(async () => [{ name, type: "vectorSearch", queryable: false }]), { code: "VECTOR_INDEX_NOT_READY" });
+  await requireQueryableVectorIndex(async () => [{ name, type: "vectorSearch", queryable: true }]);
+  assert.deepEqual(buildVectorIndexDefinition().fields.filter(field => field.type === "filter").map(field => field.path), ["visibility", "department", "embeddingModel"]);
+});
+
+test("answer provider overload returns a specific service error instead of a knowledge fallback", async () => {
+  const chunk = {
+    _id: new mongoose.Types.ObjectId(), documentId: new mongoose.Types.ObjectId(), chunkIndex: 0,
+    content: "Each position shall have a written job description.", pageNumber: 11, score: 0.89,
+    document: { _id: new mongoose.Types.ObjectId(), name: "handbook.pdf", type: "pdf", status: "completed", visibility: "organization" },
+  };
+  await assert.rejects(generateGroundedAnswer("Position description", [chunk], [], {
+    async invoke() { throw Object.assign(new Error("model high demand"), { status: 503 }); },
+  }), (error) => {
+    assert.equal(error.code, "AI_PROVIDER_UNAVAILABLE");
+    assert.equal(error.statusCode, 503);
+    assert.match(error.message, /temporarily busy/);
+    return true;
+  });
 });

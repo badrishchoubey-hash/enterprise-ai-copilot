@@ -9,10 +9,10 @@ import { createDocumentSplitter } from "../config/documentChunking.js";
 
 export interface IngestionContext {
   documentId: string;
-  tenantId: string;
   embeddingModel: string;
   visibility: "private" | "department" | "organization";
   department?: string;
+  onProgress?: (completedChunks: number, totalChunks: number) => Promise<void>;
 }
 
 const embeddingBatchSize = (): number => {
@@ -84,6 +84,7 @@ export async function ingestDocumentsIntoChunks(
   await writer.deleteForDocument(context.documentId);
   let dimensions = 0;
   try {
+    await context.onProgress?.(0, splitDocuments.length);
     const batchSize = embeddingBatchSize();
     for (let start = 0; start < splitDocuments.length; start += batchSize) {
       const batch = splitDocuments.slice(start, start + batchSize);
@@ -103,7 +104,6 @@ export async function ingestDocumentsIntoChunks(
       const records: IngestionChunkRecord[] = batch.map((document, index) => {
         const chunkIndex = start + index;
         return {
-          tenantId: context.tenantId,
           documentId: context.documentId,
           chunkIndex,
           content: document.pageContent,
@@ -117,6 +117,7 @@ export async function ingestDocumentsIntoChunks(
         };
       });
       await writer.insertBatch(records);
+      await context.onProgress?.(start + batch.length, splitDocuments.length);
     }
   } catch (error) {
     await writer.deleteForDocument(context.documentId).catch(() => undefined);

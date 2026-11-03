@@ -22,6 +22,7 @@ import {
   downloadAdminDocument,
   getAdminDocuments,
   getAdminErrorMessage,
+  reprocessUnindexedDocument,
   retryAdminDocument,
   updateAdminDocument,
   type AdminDocumentFilters,
@@ -91,12 +92,14 @@ export default function AdminDocumentsPage() {
   const [total, setTotal] = useState(0);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [pageVisible, setPageVisible] = useState(true);
   const [workingId, setWorkingId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<AdminDocument | null>(null);
   const [viewing, setViewing] = useState<AdminDocument | null>(null);
   const [deleting, setDeleting] = useState<AdminDocument | null>(null);
+  const [reprocessing, setReprocessing] = useState<AdminDocument | null>(null);
 
   const filterForm = useForm<FilterValues>({
     resolver: zodResolver(filterSchema) as never,
@@ -109,11 +112,14 @@ export default function AdminDocumentsPage() {
 
   useEffect(() => {
     let current = true;
-    setLoading(true);
-    setError("");
-    void getAdminDocuments({ ...filters, page, limit: 10 })
+    void Promise.resolve().then(() => {
+      if (!current) return undefined;
+      setLoading(true);
+      setError("");
+      return getAdminDocuments({ ...filters, page, limit: 10 });
+    })
       .then((result) => {
-        if (!current) return;
+        if (!current || !result) return;
         setDocuments(result.items);
         setTotal(result.total);
         setTotalPages(Math.max(1, result.totalPages));
@@ -130,13 +136,32 @@ export default function AdminDocumentsPage() {
   }, [filters, page, reload]);
 
   useEffect(() => {
-    if (!documents.some((document) => document.status === "processing")) return;
-    const interval = window.setInterval(
+    let initialSync = true;
+    const updateVisibility = () => {
+      const visible = document.visibilityState === "visible";
+      setPageVisible(visible);
+      if (visible && !initialSync) setReload((count) => count + 1);
+      initialSync = false;
+    };
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
+
+  useEffect(() => {
+    const processing = documents.filter((document) => document.status === "processing");
+    if (!processing.length || loading || !pageVisible) return;
+    // Wait for the earliest quota retry, or check active work after 15 seconds.
+    const nextCheck = Math.min(...processing.map((document) => {
+      const retryAt = Date.parse(document.processingProgress?.retryAt ?? "");
+      return Number.isFinite(retryAt) ? Math.max(15_000, retryAt - Date.now() + 1_000) : 15_000;
+    }));
+    const timeout = window.setTimeout(
       () => setReload((count) => count + 1),
-      2_000,
+      nextCheck,
     );
-    return () => window.clearInterval(interval);
-  }, [documents]);
+    return () => window.clearTimeout(timeout);
+  }, [documents, loading, pageVisible]);
 
   useEffect(() => {
     if (!editing) return;
@@ -231,6 +256,24 @@ export default function AdminDocumentsPage() {
     }
   };
 
+  const reprocessDocument = async () => {
+    if (!reprocessing) return;
+    const document = reprocessing;
+    setReprocessing(null);
+    setWorkingId(document.id);
+    setError("");
+    setNotice("");
+    try {
+      await reprocessUnindexedDocument(document.id);
+      setNotice(`Indexing restarted for ${document.name}.`);
+      setReload((count) => count + 1);
+    } catch (requestError) {
+      setError(getAdminErrorMessage(requestError));
+    } finally {
+      setWorkingId("");
+    }
+  };
+
   return (
     <AdminLayout
       title="Manage documents"
@@ -255,6 +298,14 @@ export default function AdminDocumentsPage() {
 
       <section className="overflow-hidden rounded-2xl border border-[#e8eaf1] bg-white">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#eef0f4] p-5">
+          <Button
+            variant="secondary"
+            className="rounded-lg px-3 py-2 text-sm"
+            disabled={loading}
+            onClick={() => setReload((count) => count + 1)}
+          >
+            Refresh status
+          </Button>
           <form
             onSubmit={filterForm.handleSubmit(applyFilters)}
             className="flex flex-1 flex-wrap items-end gap-3"
@@ -349,6 +400,23 @@ export default function AdminDocumentsPage() {
                         {document.errorMessage}
                       </p>
                     )}
+                    {document.status === "processing" && (
+                      <div className="mt-2 max-w-56 text-[11px] text-[#687386]" role="status">
+                        {document.processingProgress ? (
+                          <>
+                            <p>{document.processingProgress.completedChunks} / {document.processingProgress.totalChunks} chunks indexed</p>
+                            {document.processingProgress.retryAt && (
+                              <p className="mt-1 text-[#bd7b22]">
+                                Waiting for provider limit; retry at {new Date(document.processingProgress.retryAt).toLocaleTimeString()}.
+                              </p>
+                            )}
+                          </>
+                        ) : "Preparing document…"}
+                      </div>
+                    )}
+                    {document.status === "completed" && (document.totalChunks ?? 0) === 0 && (
+                      <p className="mt-1 text-[10px] font-medium text-[#bd7b22]">No indexed chunks</p>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-xs text-[#687386]">
                     {document.visibility === "organization"
@@ -389,6 +457,18 @@ export default function AdminDocumentsPage() {
                           title="Retry processing"
                           disabled={workingId === document.id}
                           onClick={() => void retryProcessing(document)}
+                          className="rounded-lg p-2 text-[#c77a17]"
+                        >
+                          <RotateCcw size={16} />
+                        </Button>
+                      )}
+                      {document.status === "completed" && (document.totalChunks ?? 0) === 0 && (
+                        <Button
+                          variant="icon"
+                          aria-label={`Reindex ${document.name}`}
+                          title="Reindex document"
+                          disabled={workingId === document.id}
+                          onClick={() => setReprocessing(document)}
                           className="rounded-lg p-2 text-[#c77a17]"
                         >
                           <RotateCcw size={16} />
@@ -583,6 +663,34 @@ export default function AdminDocumentsPage() {
           </div>
         </Modal>
       )}
+
+      <Modal
+        isOpen={Boolean(reprocessing)}
+        title="Reindex document?"
+        onClose={() => setReprocessing(null)}
+        closeOnBackdrop={workingId !== reprocessing?.id}
+      >
+        <p className="text-sm leading-6 text-[#687386]">
+          Reprocess <span className="font-semibold text-[#354155]">{reprocessing?.name}</span> to extract its text and create searchable chunks. It will be temporarily unavailable to AI search while processing.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            disabled={workingId === reprocessing?.id}
+            onClick={() => setReprocessing(null)}
+            className="rounded-lg px-4 py-2 text-sm"
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={!reprocessing || workingId === reprocessing.id}
+            onClick={() => void reprocessDocument()}
+            className="rounded-lg px-4 py-2 text-sm font-semibold"
+          >
+            Reindex document
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={Boolean(deleting)}

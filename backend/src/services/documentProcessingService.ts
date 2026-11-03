@@ -11,6 +11,7 @@ import { logError, logInfo } from "../utils/logger.js";
 import { toAdminDocument, validateDocumentFileContent } from "./adminKnowledgeService.js";
 import { loadDocumentFile } from "./documentLoaderService.js";
 import { ingestDocumentsIntoChunks } from "./documentIngestionPipeline.js";
+import { getEmbeddingFailureDetails, toEmbeddingError } from "./embeddingErrorService.js";
 
 const getBucket = () => {
   const db = mongoose.connection.db;
@@ -62,15 +63,28 @@ async function processClaimedDocument(document: KnowledgeDocument): Promise<void
       document.type as Parameters<typeof loadDocumentFile>[1],
       document.name,
     );
-    const embeddings = createEmbeddings();
+    const embeddings = createEmbeddings("RETRIEVAL_DOCUMENT", "current", async (waitMs) => {
+      await Documents.updateOne(
+        { _id: document._id, status: "processing" },
+        { $set: { "processingProgress.retryAt": new Date(Date.now() + waitMs) } },
+      ).exec();
+    });
     const result = await ingestDocumentsIntoChunks(
       loadedDocuments,
       {
         documentId: document._id.toString(),
-        tenantId: document.tenantId.toString(),
         embeddingModel: getEmbeddingModelIdentifier(),
         visibility: document.visibility,
         department: document.department,
+        onProgress: async (completedChunks, totalChunks) => {
+          await Documents.updateOne(
+            { _id: document._id, status: "processing" },
+            { $set: { processingProgress: { completedChunks, totalChunks } } },
+          ).exec();
+          logInfo("document.processing.progress", {
+            documentId: document._id.toString(), completedChunks, totalChunks,
+          });
+        },
       },
       embeddings,
       {
@@ -103,7 +117,7 @@ async function processClaimedDocument(document: KnowledgeDocument): Promise<void
           processedAt: new Date(),
           ...(pageCount > 0 ? { pageCount } : {}),
         },
-        $unset: { errorMessage: 1, processingHeartbeatAt: 1 },
+        $unset: { errorMessage: 1, processingHeartbeatAt: 1, processingProgress: 1 },
       },
       { new: true },
     ).exec();
@@ -117,20 +131,22 @@ async function processClaimedDocument(document: KnowledgeDocument): Promise<void
     });
   } catch (error) {
     await DocumentChunks.deleteMany({ documentId: document._id }).exec().catch(() => undefined);
-    const safeMessage = error instanceof AppError
-      ? error.message
+    const processingError = toEmbeddingError(error);
+    const safeMessage = processingError
+      ? processingError.message
       : "Document processing failed. Check the file and embedding provider configuration, then retry.";
     await Documents.updateOne(
       { _id: document._id, status: "processing" },
       {
         $set: { status: "failed", errorMessage: safeMessage },
-        $unset: { processingHeartbeatAt: 1 },
+        $unset: { processingHeartbeatAt: 1, processingProgress: 1 },
       },
     ).exec();
     logError("document.processing.failed", {
       documentId: document._id.toString(),
       errorName: error instanceof Error ? error.name : "UnknownError",
-      errorCode: error instanceof AppError ? error.code : "PROCESSING_FAILED",
+      errorCode: processingError?.code ?? "PROCESSING_FAILED",
+      ...getEmbeddingFailureDetails(error),
     });
   } finally {
     clearInterval(heartbeat);
@@ -153,26 +169,35 @@ export async function waitForDocumentProcessing(): Promise<void> {
 
 export async function recoverInterruptedDocumentProcessing(): Promise<number> {
   const staleBefore = new Date(Date.now() - 5 * 60_000);
-  const result = await Documents.updateMany(
-    {
-      status: "processing",
-      $or: [
-        { processingHeartbeatAt: { $lt: staleBefore } },
-        {
-          processingHeartbeatAt: { $exists: false },
-          updatedAt: { $lt: staleBefore },
-        },
-      ],
-    },
-    {
-      $set: {
-        status: "failed",
-        errorMessage: "Processing was interrupted. Retry this document.",
+  const staleFilter: mongoose.QueryFilter<KnowledgeDocument> = {
+    status: "processing",
+    $or: [
+      { processingHeartbeatAt: { $lt: staleBefore } },
+      {
+        processingHeartbeatAt: { $exists: false },
+        updatedAt: { $lt: staleBefore },
       },
-      $unset: { processingHeartbeatAt: 1 },
-    },
-  ).exec();
-  return result.modifiedCount;
+    ],
+  };
+  return mongoose.connection.transaction(async (session) => {
+    const stale = await Documents.find(staleFilter).select("_id").session(session).lean<Array<{ _id: Types.ObjectId }>>().exec();
+    if (!stale.length) return 0;
+    const documentIds = stale.map((document) => document._id);
+    // The transaction prevents a retry from racing partial-chunk cleanup.
+    await DocumentChunks.deleteMany({ documentId: { $in: documentIds } }).session(session).exec();
+    const result = await Documents.updateMany(
+      { ...staleFilter, _id: { $in: documentIds } },
+      {
+        $set: {
+          status: "failed",
+          totalChunks: 0,
+          errorMessage: "Processing was interrupted. Retry this document.",
+        },
+        $unset: { processingHeartbeatAt: 1, processingProgress: 1 },
+      },
+    ).session(session).exec();
+    return result.modifiedCount;
+  });
 }
 
 export async function queuePendingUploadedDocuments(): Promise<number> {
@@ -198,7 +223,7 @@ export async function queueUploadedDocument(documentId: string) {
     { _id: documentId, status: "uploaded" },
     {
       $set: { status: "processing", processingHeartbeatAt: new Date() },
-      $unset: { errorMessage: 1 },
+      $unset: { errorMessage: 1, processingProgress: 1 },
     },
     { new: true },
   ).exec();
@@ -218,7 +243,7 @@ export async function retryFailedDocument(documentId: string) {
     { _id: documentId, status: "failed" },
     {
       $set: { status: "processing", processingHeartbeatAt: new Date() },
-      $unset: { errorMessage: 1 },
+      $unset: { errorMessage: 1, processingProgress: 1 },
     },
     { new: true },
   ).exec();
@@ -226,6 +251,40 @@ export async function retryFailedDocument(documentId: string) {
     const existing = await Documents.findById(documentId).exec();
     if (!existing) throw new AppError(404, "Document not found.", "DOCUMENT_NOT_FOUND");
     throw new AppError(409, "Only failed documents can be retried.", "DOCUMENT_NOT_RETRYABLE");
+  }
+  if (process.env.VERCEL === "1") await processClaimedDocument(document);
+  else scheduleClaimedDocument(document);
+  const current = await Documents.findById(document._id).exec();
+  return current ? toAdminDocument(current) : null;
+}
+
+export async function reprocessUnindexedDocument(documentId: string) {
+  if (!Types.ObjectId.isValid(documentId)) {
+    throw new AppError(400, "documentId is invalid.", "INVALID_DOCUMENT_ID");
+  }
+  const document = await Documents.findOneAndUpdate(
+    {
+      _id: documentId,
+      status: "completed",
+      $or: [
+        { totalChunks: 0 },
+        { totalChunks: { $exists: false } },
+      ],
+    },
+    {
+      $set: { status: "processing", processingHeartbeatAt: new Date() },
+      $unset: { errorMessage: 1, processingProgress: 1 },
+    },
+    { new: true },
+  ).exec();
+  if (!document) {
+    const existing = await Documents.findById(documentId).exec();
+    if (!existing) throw new AppError(404, "Document not found.", "DOCUMENT_NOT_FOUND");
+    throw new AppError(
+      409,
+      "Only completed documents with no indexed chunks can be reprocessed.",
+      "DOCUMENT_NOT_REPROCESSABLE",
+    );
   }
   if (process.env.VERCEL === "1") await processClaimedDocument(document);
   else scheduleClaimedDocument(document);

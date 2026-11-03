@@ -29,7 +29,6 @@ const chunkSchema = new Schema<DocumentChunkDocument>(
   { timestamps: true, strict: "throw" },
 );
 chunkSchema.index({ documentId: 1, chunkIndex: 1 }, { unique: true });
-chunkSchema.index({ tenantId: 1, documentId: 1, chunkIndex: 1 });
 
 export const DocumentChunks = registered<DocumentChunkDocument>(
   "DocumentChunks",

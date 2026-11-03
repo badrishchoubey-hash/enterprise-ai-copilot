@@ -6,15 +6,12 @@ import {
   BookOpen,
   FileText,
   LayoutDashboard,
-  MessageSquare,
-  Search,
   ShieldCheck,
   Users,
   Upload,
   BarChart3,
   X,
   Bot,
-  Quote,
 } from "lucide-react";
 
 import Button from "@/components/ui/button/button";
@@ -36,10 +33,7 @@ const adminLinks = [
 
 const employeeLinks = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Search knowledge", href: "/search", icon: Search },
   { label: "Ask AI", href: "/chat", icon: Bot },
-  { label: "Conversations", href: "/conversations", icon: MessageSquare },
-  { label: "Source citations", href: "/citations", icon: Quote },
 ];
 
 export default function Sidebar({

@@ -99,3 +99,19 @@ export function backendAdminFetch(
     cache: "no-store",
   });
 }
+
+export function backendApiFetch(
+  path: string,
+  accessToken: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const normalizedPath = path.replace(/^\/+/, "");
+  return fetch(`${backendBaseUrl}/v1/${normalizedPath}`, {
+    ...init,
+    headers: {
+      ...Object.fromEntries(new Headers(init.headers).entries()),
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: "no-store",
+  });
+}

@@ -1,5 +1,4 @@
 export interface IngestionChunkRecord {
-  tenantId: string;
   documentId: string;
   chunkIndex: number;
   content: string;

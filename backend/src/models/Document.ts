@@ -48,14 +48,21 @@ const documentSchema = new Schema<KnowledgeDocument>(
     totalChunks: { type: Number, min: 0, default: 0 },
     processedAt: { type: Date },
     processingHeartbeatAt: { type: Date },
+    processingProgress: {
+      type: new Schema({
+        completedChunks: { type: Number, min: 0, required: true },
+        totalChunks: { type: Number, min: 0, required: true },
+        retryAt: { type: Date },
+      }, { _id: false }),
+      default: undefined,
+    },
     errorMessage: optionalText(2000),
   },
   { timestamps: true, strict: "throw" },
 );
-documentSchema.index({ tenantId: 1, fileHash: 1 }, { unique: true });
-documentSchema.index({ tenantId: 1, status: 1, createdAt: -1, _id: -1 });
+documentSchema.index({ fileHash: 1 }, { unique: true });
+documentSchema.index({ status: 1, createdAt: -1, _id: -1 });
 documentSchema.index({
-  tenantId: 1,
   department: 1,
   visibility: 1,
   createdAt: -1,

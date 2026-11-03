@@ -27,6 +27,11 @@ export interface AdminDocument {
   mimeType?: string;
   pageCount?: number;
   totalChunks?: number;
+  processingProgress?: {
+    completedChunks: number;
+    totalChunks: number;
+    retryAt?: string;
+  };
   processedAt?: string;
   errorMessage?: string;
   createdAt: string;

@@ -7,9 +7,9 @@ import {
   getLegacyEmbeddingModelIdentifier,
 } from "../config/embeddings.js";
 import { getVectorSearchConfig } from "../config/vectorSearch.js";
+import { requireQueryableVectorIndex } from "./vectorIndexService.js";
 
 export interface RetrievalAccessContext {
-  tenantId: Types.ObjectId;
   role: "employee" | "support_agent" | "admin";
   department?: string;
 }
@@ -27,7 +27,6 @@ export interface RetrievedChunk {
     name: string;
     type: string;
     status: string;
-    tenantId: Types.ObjectId;
     visibility: "private" | "department" | "organization";
     department?: string;
   };
@@ -43,8 +42,7 @@ const accessRule = (
   prefix: "" | "document.",
   access: RetrievalAccessContext,
 ): Record<string, unknown> => {
-  const tenant = { [`${prefix}tenantId`]: access.tenantId };
-  if (access.role === "admin") return tenant;
+  if (access.role === "admin") return {};
   const allowedVisibility = access.department
     ? {
         $or: [
@@ -56,7 +54,7 @@ const accessRule = (
         ],
       }
     : { [`${prefix}visibility`]: "organization" };
-  return { $and: [tenant, allowedVisibility] };
+  return allowedVisibility;
 };
 
 export function buildVectorRetrievalPipeline(
@@ -75,9 +73,6 @@ export function buildVectorRetrievalPipeline(
       "EMBEDDING_DIMENSION_MISMATCH",
     );
   }
-  if (!Types.ObjectId.isValid(access.tenantId)) {
-    throw new AppError(403, "Knowledge base access is not configured.", "TENANT_ACCESS_UNAVAILABLE");
-  }
   return [
     {
       $vectorSearch: {
@@ -88,7 +83,7 @@ export function buildVectorRetrievalPipeline(
         limit: Math.min(config.numCandidates, Math.max(config.topK * 3, config.topK)),
         filter: {
           $and: [
-            accessRule("", access),
+            ...(access.role === "admin" ? [] : [accessRule("", access)]),
             { embeddingModel: embeddingModel ?? config.embeddingModel },
           ],
         },
@@ -129,7 +124,6 @@ export function buildVectorRetrievalPipeline(
           name: "$document.name",
           type: "$document.type",
           status: "$document.status",
-          tenantId: "$document.tenantId",
           visibility: "$document.visibility",
           department: "$document.department",
         },
@@ -149,7 +143,6 @@ export async function retrieveRelevantChunks(
     storedModels = dependencies
       ? await dependencies.getStoredModels()
       : await DocumentChunks.distinct("embeddingModel", {
-          tenantId: access.tenantId,
           embedding: { $exists: true },
         }).exec();
   } catch (error) {
@@ -179,6 +172,14 @@ export async function retrieveRelevantChunks(
     }
   }
   if (!storedModels.length) return [];
+  if (!dependencies) {
+    try {
+      await requireQueryableVectorIndex();
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(503, "Knowledge search index status could not be checked.", "VECTOR_SEARCH_UNAVAILABLE", { cause: error });
+    }
+  }
   const compatibleModels = [
     ...(storedModels.includes(config.embeddingModel) ? [config.embeddingModel] : []),
     ...(getLegacyEmbeddingModelIdentifier() &&

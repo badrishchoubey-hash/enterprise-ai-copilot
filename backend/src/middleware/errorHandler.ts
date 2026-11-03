@@ -11,9 +11,13 @@ const isMongoError = (error: unknown): boolean => {
   };
   return Boolean(
     value?.name?.startsWith("Mongo") ||
-    value?.name === "MongooseError" ||
+    value?.name === "MongooseServerSelectionError" ||
+    value?.name === "MongooseNetworkError" ||
     value?.code === 11000 ||
     value?.syscall === "querySrv" ||
+    /buffering timed out|server selection timed out|connection (?:closed|not ready)/i.test(
+      value?.message ?? "",
+    ) ||
     /querySrv\s+E(?:TIMEOUT|TIMEDOUT|CONNREFUSED|CONNRESET|NOTFOUND|AI_AGAIN)/i.test(
       value?.message ?? "",
     ),

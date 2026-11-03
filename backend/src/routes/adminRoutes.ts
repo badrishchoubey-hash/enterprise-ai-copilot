@@ -15,6 +15,7 @@ import {
   getAdminKnowledgeBase,
   patchAdminDocument,
   postAdminDocument,
+  reprocessUnindexedDocumentRoute,
   retryAdminDocumentRoute,
 } from "../controllers/adminKnowledgeController.js";
 import { authenticateUser } from "../middleware/authenticateUser.js";
@@ -34,6 +35,7 @@ router.post("/documents/upload-signature", getAdminDocumentUploadSignature);
 router.post("/documents/upload", postAdminDocument);
 router.get("/documents/:documentId/file", getAdminDocumentFile);
 router.post("/documents/:documentId/retry", retryAdminDocumentRoute);
+router.post("/documents/:documentId/reprocess", reprocessUnindexedDocumentRoute);
 router.get("/documents/:documentId", getAdminDocument);
 router.patch("/documents/:documentId", patchAdminDocument);
 router.delete("/documents/:documentId", deleteAdminDocumentRoute);

@@ -4,7 +4,6 @@ import Users from "../models/User.js";
 import type { UserDocument } from "../types/modelTypes/User.js";
 import type { UserRole } from "../types/auth.types.js";
 import { AppError } from "../middleware/appError.js";
-import { getOrganizationId } from "./organizationTenantService.js";
 
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS) || 12;
 const roles: UserRole[] = ["employee", "support_agent", "admin"];
@@ -131,7 +130,6 @@ export async function createManagedUser(input: AdminUserInput) {
     const user = await Users.create({
       name,
       email,
-      tenantId: getOrganizationId(),
       passwordHash: await bcrypt.hash(input.password, BCRYPT_ROUNDS),
       role,
       department: department || undefined,

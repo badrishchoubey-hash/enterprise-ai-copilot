@@ -1,7 +1,8 @@
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
-import { TaskType } from "@google/generative-ai";
+import { GoogleGenerativeAI, TaskType, type GenerativeModel } from "@google/generative-ai";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { AppError } from "../middleware/appError.js";
+import { withEmbeddingRetry, type EmbeddingRetryBudget } from "../services/embeddingRetryService.js";
 
 export type EmbeddingTask = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY";
 export type EmbeddingProvider = "gemini" | "openai";
@@ -14,18 +15,42 @@ export const formatGeminiQuestionText = (text: string): string =>
   `task: question answering | query: ${text}`;
 
 class GeminiTaskAwareEmbeddings extends GoogleGenerativeAIEmbeddings {
+  private readonly batchClient: GenerativeModel;
+  private readonly retryBudget: EmbeddingRetryBudget;
   constructor(
     fields: ConstructorParameters<typeof GoogleGenerativeAIEmbeddings>[0],
     private readonly useQuestionAnsweringPrefixes: boolean,
+    onRetry?: (waitMs: number) => Promise<void>,
   ) {
     super(fields);
+    this.retryBudget = { remainingRetries: 3, onRetry };
+    this.batchClient = new GoogleGenerativeAI(this.apiKey!).getGenerativeModel(
+      { model: this.model },
+      { baseUrl: fields?.baseUrl },
+    );
+  }
+
+  protected override async _embedDocumentsContent(documents: string[]): Promise<number[][]> {
+    // Unlike the upstream adapter, propagate batch failures to the retry policy.
+    const vectors: number[][] = [];
+    for (let start = 0; start < documents.length; start += this.maxBatchSize) {
+      const response = await withEmbeddingRetry(() => this.batchClient.batchEmbedContents({
+        requests: documents.slice(start, start + this.maxBatchSize).map((text) => ({
+          content: { role: "user", parts: [{ text: this.stripNewLines ? text.replace(/\n/g, " ") : text }] },
+          taskType: this.taskType,
+          title: this.title,
+          outputDimensionality: this.outputDimensionality,
+        })),
+      }, { timeout: 60_000 }), undefined, this.retryBudget);
+      vectors.push(...response.embeddings.map((embedding) => embedding.values ?? []));
+    }
+    return vectors;
   }
 
   override embedDocuments(documents: string[]): Promise<number[][]> {
-    return super.embedDocuments(
-      this.useQuestionAnsweringPrefixes
-        ? documents.map(formatGeminiDocumentText)
-        : documents,
+    // Retry each failed batch independently so successful batches are not resent.
+    return this._embedDocumentsContent(
+      this.useQuestionAnsweringPrefixes ? documents.map(formatGeminiDocumentText) : documents,
     );
   }
 
@@ -79,6 +104,7 @@ export function getLegacyEmbeddingModelIdentifier(): string | undefined {
 export function createEmbeddings(
   task: EmbeddingTask = "RETRIEVAL_DOCUMENT",
   format: GeminiEmbeddingFormat = "current",
+  onRetry?: (waitMs: number) => Promise<void>,
 ):
   | GoogleGenerativeAIEmbeddings
   | OpenAIEmbeddings {
@@ -127,7 +153,7 @@ export function createEmbeddings(
       outputDimensionality:
         dimensions ??
         (isEmbedding2 ? 768 : undefined),
-    }, isEmbedding2 && format === "current");
+    }, isEmbedding2 && format === "current", onRetry);
   }
 
   const baseURL = process.env.EMBEDDING_BASE_URL?.trim();

@@ -10,7 +10,6 @@ export interface DocumentChunkDocument extends Document {
   embeddingModel?: string;
   embeddingRef?: string;
   metadata?: Record<string, unknown>;
-  tenantId: Types.ObjectId;
   department?: string;
   visibility: "private" | "department" | "organization";
   createdAt: Date;

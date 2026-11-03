@@ -14,14 +14,13 @@ export async function postAskQuestion(
       throw new AppError(401, "Authentication required.", "AUTHENTICATION_REQUIRED");
     }
     const input = validateAskQuestionBody(req.body);
-    if (!Types.ObjectId.isValid(req.user.userId) || !Types.ObjectId.isValid(req.user.tenantId)) {
+    if (!Types.ObjectId.isValid(req.user.userId)) {
       throw new AppError(401, "Authentication required.", "AUTHENTICATION_REQUIRED");
     }
     const data = await askKnowledgeBase(
       input,
       {
         userId: new Types.ObjectId(req.user.userId),
-        tenantId: new Types.ObjectId(req.user.tenantId),
         role: req.user.role,
         department: req.user.department,
       },

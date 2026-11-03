@@ -21,7 +21,6 @@ import {
 import {
   downloadCloudinaryAssetToTemporaryFile,
 } from "../utils/tempDocumentFile.js";
-import { getOrganizationId } from "./organizationTenantService.js";
 
 const visibilities = ["private", "department", "organization"] as const;
 const statuses = [
@@ -135,7 +134,7 @@ export async function validateDocumentFileContent(
   > = {
     pdf: new Set(["pdf"]),
     doc: new Set(["cfb"]),
-    docx: new Set(["zip"]),
+    docx: new Set(["docx"]),
   };
   const expected = binarySignatures[extension];
   if (expected ? !detected || !expected.has(detected.ext) : detected !== undefined) {
@@ -210,6 +209,7 @@ export const toAdminDocument = (document: KnowledgeDocument) => {
     mimeType: document.mimeType,
     pageCount: document.pageCount,
     totalChunks: document.totalChunks ?? 0,
+    processingProgress: document.status === "processing" ? document.processingProgress : undefined,
     processedAt: document.processedAt,
     errorMessage: document.errorMessage,
     createdAt: document.createdAt,
@@ -356,7 +356,6 @@ export async function uploadAdminDocument(
     ReturnType<typeof downloadCloudinaryAssetToTemporaryFile>
   > | undefined;
   let preserveCloudinaryAsset = false;
-  const organizationId = getOrganizationId();
   try {
     temporaryFile = await downloadCloudinaryAssetToTemporaryFile(
       input.publicId,
@@ -379,7 +378,6 @@ export async function uploadAdminDocument(
     );
     const fileHash = temporaryFile.sha256;
     const duplicate = await Documents.findOne({
-      tenantId: organizationId,
       $or: [
         { contentHash: fileHash },
         { contentHash: { $exists: false }, fileHash },
@@ -411,7 +409,6 @@ export async function uploadAdminDocument(
       fileHash,
       contentHash: fileHash,
       uploadedBy: actorId,
-      tenantId: organizationId,
       visibility: metadata.visibility,
       department: input.department?.trim() || undefined,
       storageKey: input.publicId,
@@ -423,7 +420,6 @@ export async function uploadAdminDocument(
   } catch (error) {
     if ((error as { code?: number })?.code === 11000) {
       const existingAssetDocument = await Documents.findOne({
-        tenantId: organizationId,
         storageKey: input.publicId,
       });
       if (existingAssetDocument) return toAdminDocument(existingAssetDocument);

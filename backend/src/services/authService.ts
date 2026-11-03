@@ -17,7 +17,6 @@ import type {
 import { AppError } from "../middleware/appError.js";
 import { logError, logInfo } from "../utils/logger.js";
 import { AuthError } from "../errors/AuthError.js";
-import { getOrganizationId } from "./organizationTenantService.js";
 
 // --------------------------------------------------
 // Configuration
@@ -282,7 +281,6 @@ export async function registerUser(
           {
             name,
             email: normalizedEmail,
-            tenantId: getOrganizationId(),
             passwordHash,
             role: input.role ?? "employee",
             department: department || undefined,

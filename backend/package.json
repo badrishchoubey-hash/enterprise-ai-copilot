@@ -11,6 +11,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
+    "setup:vector-index": "npm run build && node scripts/setup-vector-index.cjs",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "format": "prettier --write .",

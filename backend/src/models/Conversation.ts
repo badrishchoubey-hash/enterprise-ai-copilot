@@ -6,13 +6,12 @@ const conversationSchema = new Schema<ConversationDocument>(
   {
     userId: { type: objectId(), required: true, ref: "Users", immutable: true },
     title: requiredText(300),
-    tenantId: { type: objectId(), required: true, ref: "Organizations" },
     lastMessageAt: Date,
     archivedAt: Date,
   },
   { timestamps: true, strict: "throw" },
 );
-conversationSchema.index({ tenantId: 1, userId: 1, updatedAt: -1, _id: -1 });
+conversationSchema.index({ userId: 1, updatedAt: -1, _id: -1 });
 
 export const Conversations = registered<ConversationDocument>(
   "Conversations",

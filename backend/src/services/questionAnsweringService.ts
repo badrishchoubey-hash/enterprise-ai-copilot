@@ -103,11 +103,14 @@ export async function generateGroundedAnswer(
     const errorCode = String((error as { code?: string | number })?.code ?? "");
     const isRateLimited = status === 429 ||
       /RESOURCE_EXHAUSTED|RATE_LIMIT/i.test(`${errorCode} ${String(status ?? "")}`);
+    const isUnavailable = status === 503;
     const code = isRateLimited
       ? "AI_RATE_LIMITED"
       : error instanceof AppError
         ? error.code
-        : "AI_PROVIDER_FAILED";
+        : isUnavailable
+          ? "AI_PROVIDER_UNAVAILABLE"
+          : "AI_PROVIDER_FAILED";
     const httpStatus = error instanceof AppError ? error.statusCode : isRateLimited ? 429 : 503;
     logError("ai.answer.generation.failed", {
       errorType: (error as { name?: string })?.name,
@@ -119,7 +122,9 @@ export async function generateGroundedAnswer(
         ? error.message
         : isRateLimited
           ? "The answer provider is rate limited. Try again shortly."
-          : "The answer could not be generated right now.",
+          : isUnavailable
+            ? "The AI answer service is temporarily busy (503). Your documents remain available; try your question again shortly."
+            : "The answer could not be generated right now.",
       code,
       { cause: error },
     );
@@ -171,7 +176,6 @@ const conversationHistory = async (conversationId: Types.ObjectId, userId: Types
 async function persistConversationTurn(
   input: AskQuestionInput,
   userId: Types.ObjectId,
-  tenantId: Types.ObjectId,
   answer: string,
   sources: QuestionCitation[],
 ): Promise<string> {
@@ -184,7 +188,6 @@ async function persistConversationTurn(
         conversation = await Conversations.findOne({
           _id: input.conversationId,
           userId,
-          tenantId,
           archivedAt: { $exists: false },
         }).session(session).exec();
         if (!conversation) {
@@ -194,7 +197,6 @@ async function persistConversationTurn(
         [conversation] = await Conversations.create(
           [{
             userId,
-            tenantId,
             title: input.question.slice(0, 300),
             lastMessageAt: new Date(),
           }],
@@ -217,7 +219,7 @@ async function persistConversationTurn(
           { conversationId, userId, role: "user", content: input.question, citations: [] },
           { conversationId, userId, role: "assistant", content: answer, citations: messageCitations, modelName: getChatModelName() },
         ],
-        { session },
+        { session, ordered: true },
       );
       conversation.lastMessageAt = new Date();
       await conversation.save({ session });
@@ -240,7 +242,6 @@ export async function askKnowledgeBase(
     const conversation = await Conversations.findOne({
       _id: input.conversationId,
       userId: access.userId,
-      tenantId: access.tenantId,
       archivedAt: { $exists: false },
     }).select("_id").lean().exec();
     if (!conversation) throw new AppError(404, "Conversation not found.", "CONVERSATION_NOT_FOUND");
@@ -256,7 +257,6 @@ export async function askKnowledgeBase(
   const conversationId = await persistConversationTurn(
     input,
     access.userId,
-    access.tenantId,
     generated.answer,
     generated.sources,
   );
