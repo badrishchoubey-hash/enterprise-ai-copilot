@@ -569,25 +569,40 @@ export async function deleteAdminDocument(documentId: string) {
   // Remove external storage first. If that fails, retain the database record
   // so the deletion can be retried without losing the only file reference.
   if (document.storageProvider === "cloudinary") {
-    await getCloudinary().uploader.destroy(document.storageKey, {
-      resource_type: "raw",
-      type: "authenticated",
-      invalidate: true,
-    });
+    const cloudinary = getCloudinary();
+    try {
+      const response = await cloudinary.uploader.destroy(document.storageKey, {
+        resource_type: "raw",
+        type: "authenticated",
+        invalidate: true,
+      });
+      // "not found" permits a retry after storage deletion succeeded but the
+      // database transaction failed, or the asset was already removed.
+      if (response?.result !== "ok" && response?.result !== "not found") {
+        throw new Error("Cloudinary did not confirm deletion.");
+      }
+    } catch (error) {
+      throw new AppError(
+        502,
+        "The stored file could not be deleted from Cloudinary. The document was retained; retry deleting it.",
+        "DOCUMENT_STORAGE_DELETE_FAILED",
+        { cause: error },
+      );
+    }
   } else {
     const fileId = fileIdFromDocument(document);
     const bucket = getBucket();
     const fileExists = await bucket.find({ _id: fileId }).hasNext();
     if (fileExists) await bucket.delete(fileId);
   }
-  await Documents.deleteOne({ _id: document._id }).exec();
-  await Promise.all([
-    DocumentChunks.deleteMany({ documentId: document._id }).exec(),
-    Messages.updateMany(
+  await mongoose.connection.transaction(async (session) => {
+    await DocumentChunks.deleteMany({ documentId: document._id }).session(session).exec();
+    await Messages.updateMany(
       { "citations.documentId": document._id },
       { $pull: { citations: { documentId: document._id } } },
-    ).exec(),
-  ]);
+    ).session(session).exec();
+    await Documents.deleteOne({ _id: document._id }).session(session).exec();
+  });
   return toAdminDocument(document);
 }
 

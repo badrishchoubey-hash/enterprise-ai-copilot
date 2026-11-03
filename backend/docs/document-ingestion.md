@@ -39,6 +39,21 @@ and pauses checks while the tab is hidden. The local server checks for expired
 worker heartbeats every minute; workers interrupted by a restart become failed
 after their heartbeat has been stale for five minutes and can then be retried.
 
+## Document deletion
+
+Use `DELETE /api/v1/admin/documents/:documentId` (the app's delete action) to
+remove documents. Cloudinary assets are deleted using the stored public ID,
+`resource_type: raw`, `type: authenticated`, and CDN invalidation. Only confirmed
+`ok` or `not found` results permit database deletion. If Cloudinary fails or
+returns an unconfirmed result, the database record and references remain intact
+and the API returns `DOCUMENT_STORAGE_DELETE_FAILED` so deletion can be retried.
+
+After storage removal, the document, chunks, and message citations are cleaned
+up in one MongoDB transaction. If that transaction fails, the record remains
+available for a retry; an already absent Cloudinary file is accepted on retry.
+Documents being processed cannot be deleted. Direct manual MongoDB deletes
+bypass application cleanup and must not be used for this workflow.
+
 ## MongoDB indexes
 
 Mongoose declares a unique `{ fileHash: 1 }` index on `Documents` for duplicate
