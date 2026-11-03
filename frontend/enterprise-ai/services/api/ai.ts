@@ -5,6 +5,7 @@ export async function askQuestion(input: AskQuestionInput) {
   const { data } = await apiClient.post<AskQuestionResponse>(
     "/v1/ai/ask",
     input,
+    { timeout: 90_000 },
   );
   return data.data;
 }

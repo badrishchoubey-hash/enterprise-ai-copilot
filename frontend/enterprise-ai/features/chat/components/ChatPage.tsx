@@ -173,15 +173,15 @@ export default function ChatPage() {
 
             <form onSubmit={handleSubmit(submitQuestion)} className="border-t border-[#edf0f5] p-3 sm:p-5">
               <label htmlFor="chat-question" className="sr-only">Ask a question</label>
-              <div className="flex items-end gap-2 sm:gap-3">
-                <div className="min-w-0 flex-1">
-                  <Input
+              <div className="grid grid-cols-[minmax(0,1fr)_3rem] items-start gap-2 sm:gap-3">
+                <div className="min-w-0">
+                    <Input
                     id="chat-question"
                     placeholder="Ask a question about company knowledge…"
                     autoComplete="off"
                     aria-invalid={Boolean(errors.question)}
                     aria-describedby={errors.question ? "chat-question-error" : "chat-question-hint"}
-                    className="min-h-12 w-full rounded-xl border border-[#e1e5ed] px-4 py-3 text-sm outline-none focus:border-[#716be8]"
+                    className="h-12 rounded-xl border border-[#e1e5ed] px-4 text-sm outline-none focus:border-[#716be8]"
                     {...register("question")}
                   />
                   {errors.question ? (
