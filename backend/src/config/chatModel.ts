@@ -15,7 +15,7 @@ const positiveInteger = (name: string, fallback: number, maximum: number) => {
 };
 
 export function getChatModelName(): string {
-  return process.env.GEMINI_CHAT_MODEL?.trim() || "gemini-3.8-flash";
+  return process.env.GEMINI_CHAT_MODEL?.trim() || "gemini-3.1-flash-lite";
 }
 
 export function createChatModel(): ChatGoogleGenerativeAI {
@@ -40,7 +40,7 @@ export function createChatModel(): ChatGoogleGenerativeAI {
     model: getChatModelName(),
     temperature,
     maxOutputTokens: positiveInteger("GEMINI_CHAT_MAX_OUTPUT_TOKENS", 1024, 8192),
-    maxRetries: 2,
+    maxRetries: 0,
     streaming: false,
   });
 }

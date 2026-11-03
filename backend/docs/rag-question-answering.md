@@ -60,6 +60,31 @@ by a different model are detected and retrieval returns
 `409 EMBEDDING_MODEL_MISMATCH` rather than comparing incompatible vectors.
 The service never re-embeds completed documents automatically.
 
+The default answer model is `gemini-3.1-flash-lite`. Set `GEMINI_CHAT_MODEL` to
+override it; an existing environment value takes precedence over the default.
+Changing this answer model does not change document or query embeddings and
+does not require reindexing documents.
+
+## Request deadlines
+
+The ask endpoint uses a separate request budget instead of the ordinary
+30-second API timeout. Defaults are 15 seconds per query embedding
+(`AI_EMBEDDING_TIMEOUT_MS`), 30 seconds for answer generation
+(`GEMINI_CHAT_TIMEOUT_MS`), and 75 seconds overall (`AI_REQUEST_TIMEOUT_MS`).
+The overall budget is at least two query embedding budgets plus the generation
+budget and 15 seconds for retrieval and conversation persistence, including
+compatibility queries against legacy vectors. Query embeddings and chat calls
+do not automatically retry provider errors. Document ingestion retains its
+separate quota retry policy.
+
+The Next.js ask proxy waits up to 85 seconds (`BACKEND_AI_REQUEST_TIMEOUT_MS` in
+the frontend environment), and the browser waits 90 seconds. If backend stage
+timeouts are increased, increase these outer limits and the route's `maxDuration`
+too. A timed-out or disconnected request signals cancellation to Gemini calls
+and prevents subsequent conversation work. A slow embedding reports
+`EMBEDDING_QUERY_TIMEOUT`; a slow answer reports `AI_REQUEST_TIMEOUT`, rather
+than a generic `API_TIMEOUT` or a knowledge-base fallback.
+
 ## API
 
 Send a bearer access token with:

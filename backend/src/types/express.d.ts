@@ -5,6 +5,7 @@ declare global {
     interface Request {
       user?: AuthenticatedUserContext;
       requestId?: string;
+      requestSignal?: AbortSignal;
     }
   }
 }

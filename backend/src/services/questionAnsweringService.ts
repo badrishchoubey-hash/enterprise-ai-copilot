@@ -10,9 +10,11 @@ import Messages from "../models/Message.js";
 import QueryLogs from "../models/QueryLog.js";
 import { AppError } from "../middleware/appError.js";
 import { logError } from "../utils/logger.js";
+import { getChatTimeoutMs } from "../config/aiTimeouts.js";
+import { withAiDeadline } from "./aiDeadlineService.js";
 
 export interface ChatClient {
-  invoke(messages: Array<SystemMessage | HumanMessage>): Promise<{ content: unknown }>;
+  invoke(messages: Array<SystemMessage | HumanMessage>, options?: { signal?: AbortSignal }): Promise<{ content: unknown }>;
 }
 
 export interface QuestionCitation {
@@ -74,29 +76,24 @@ export async function generateGroundedAnswer(
   chunks: RetrievedChunk[],
   history: Array<{ role: "user" | "assistant"; content: string }>,
   model?: ChatClient,
+  requestSignal?: AbortSignal,
 ): Promise<{ answer: string; sources: QuestionCitation[] }> {
+  requestSignal?.throwIfAborted();
   if (!chunks.length) return { answer: KNOWLEDGE_BASE_FALLBACK, sources: [] };
   const evidence = chunks.map(contextFromChunk);
   const prompt = buildGroundedPrompt(question, evidence, history);
-  const timeoutMs = Number(process.env.GEMINI_CHAT_TIMEOUT_MS) || 30_000;
+  const timeoutMs = getChatTimeoutMs();
   const chatModel = model ?? createChatModel();
-  const modelCall = chatModel.invoke([
-    new SystemMessage(prompt.system),
-    new HumanMessage(prompt.user),
-  ]);
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   let result: { content: unknown };
   try {
-    result = await Promise.race([
-      modelCall,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () => reject(new AppError(504, "The answer service timed out.", "AI_REQUEST_TIMEOUT")),
-          timeoutMs,
-        );
-        timeout.unref?.();
-      }),
-    ]);
+    result = await withAiDeadline(
+      (signal) => chatModel.invoke([
+        new SystemMessage(prompt.system), new HumanMessage(prompt.user),
+      ], { signal }),
+      timeoutMs,
+      new AppError(504, "The answer service timed out. Try again shortly.", "AI_REQUEST_TIMEOUT"),
+      requestSignal,
+    );
   } catch (error) {
     const status = (error as { status?: number; statusCode?: number })?.status ??
       (error as { statusCode?: number })?.statusCode;
@@ -128,8 +125,6 @@ export async function generateGroundedAnswer(
       code,
       { cause: error },
     );
-  } finally {
-    if (timeout) clearTimeout(timeout);
   }
 
   const rawAnswer = responseText(result.content);
@@ -178,11 +173,13 @@ async function persistConversationTurn(
   userId: Types.ObjectId,
   answer: string,
   sources: QuestionCitation[],
+  requestSignal?: AbortSignal,
 ): Promise<string> {
   const session = await mongoose.startSession();
   let conversationId: Types.ObjectId | undefined;
   try {
     await session.withTransaction(async () => {
+      requestSignal?.throwIfAborted();
       let conversation;
       if (input.conversationId) {
         conversation = await Conversations.findOne({
@@ -204,6 +201,7 @@ async function persistConversationTurn(
         );
       }
       if (!conversation) throw new AppError(503, "Conversation could not be saved.", "CONVERSATION_SAVE_FAILED");
+      requestSignal?.throwIfAborted();
       conversationId = conversation._id;
       const messageCitations = sources.map((source) => ({
         documentId: new Types.ObjectId(source.documentId),
@@ -223,6 +221,7 @@ async function persistConversationTurn(
       );
       conversation.lastMessageAt = new Date();
       await conversation.save({ session });
+      requestSignal?.throwIfAborted();
     });
   } finally {
     await session.endSession();
@@ -235,6 +234,7 @@ export async function askKnowledgeBase(
   input: AskQuestionInput,
   access: RetrievalAccessContext & { userId: Types.ObjectId },
   requestId?: string,
+  requestSignal?: AbortSignal,
 ): Promise<{ answer: string; sources: QuestionCitation[]; conversationId: string }> {
   const startedAt = Date.now();
   let history: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -248,17 +248,22 @@ export async function askKnowledgeBase(
     history = await conversationHistory(conversation._id, access.userId);
   }
 
-  const chunks = await retrieveRelevantChunks(input.question, access);
+  requestSignal?.throwIfAborted();
+  const chunks = await retrieveRelevantChunks(input.question, access, undefined, requestSignal);
   const generated = await generateGroundedAnswer(
     input.question,
     chunks,
     history,
+    undefined,
+    requestSignal,
   );
+  requestSignal?.throwIfAborted();
   const conversationId = await persistConversationTurn(
     input,
     access.userId,
     generated.answer,
     generated.sources,
+    requestSignal,
   );
 
   const latencyMs = Date.now() - startedAt;

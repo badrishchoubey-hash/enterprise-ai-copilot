@@ -8,6 +8,8 @@ import {
 } from "../config/embeddings.js";
 import { getVectorSearchConfig } from "../config/vectorSearch.js";
 import { requireQueryableVectorIndex } from "./vectorIndexService.js";
+import { getQueryEmbeddingTimeoutMs } from "../config/aiTimeouts.js";
+import { withAiDeadline } from "./aiDeadlineService.js";
 
 export interface RetrievalAccessContext {
   role: "employee" | "support_agent" | "admin";
@@ -33,7 +35,7 @@ export interface RetrievedChunk {
 }
 
 export interface VectorRetrievalDependencies {
-  embedQuery(question: string, format?: "current" | "legacy-raw"): Promise<number[]>;
+  embedQuery(question: string, format?: "current" | "legacy-raw", signal?: AbortSignal): Promise<number[]>;
   getStoredModels(): Promise<string[]>;
   search(pipeline: PipelineStage[]): Promise<RetrievedChunk[]>;
 }
@@ -136,7 +138,9 @@ export async function retrieveRelevantChunks(
   question: string,
   access: RetrievalAccessContext,
   dependencies?: VectorRetrievalDependencies,
+  requestSignal?: AbortSignal,
 ): Promise<RetrievedChunk[]> {
+  requestSignal?.throwIfAborted();
   const config = getVectorSearchConfig();
   let storedModels: string[];
   try {
@@ -194,9 +198,14 @@ export async function retrieveRelevantChunks(
       : "current";
     let vector: number[];
     try {
-      vector = dependencies
-        ? await dependencies.embedQuery(question, format)
-        : await createEmbeddings("RETRIEVAL_QUERY", format).embedQuery(question);
+      vector = await withAiDeadline(
+        (signal) => dependencies
+          ? dependencies.embedQuery(question, format, signal)
+          : createEmbeddings("RETRIEVAL_QUERY", format, undefined, signal).embedQuery(question),
+        getQueryEmbeddingTimeoutMs(),
+        new AppError(504, "The question embedding service timed out. Try again shortly.", "EMBEDDING_QUERY_TIMEOUT"),
+        requestSignal,
+      );
     } catch (error) {
       if (error instanceof AppError) throw error;
       const status = (error as { status?: number; statusCode?: number })?.status ??
@@ -219,6 +228,7 @@ export async function retrieveRelevantChunks(
       );
     }
     const pipeline = buildVectorRetrievalPipeline(vector, access, modelIdentifier);
+    requestSignal?.throwIfAborted();
     try {
       const matches = dependencies
         ? await dependencies.search(pipeline)

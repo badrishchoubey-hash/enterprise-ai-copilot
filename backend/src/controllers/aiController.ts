@@ -25,13 +25,16 @@ export async function postAskQuestion(
         department: req.user.department,
       },
       req.requestId,
+      req.requestSignal,
     );
+    if (res.writableEnded || req.requestSignal?.aborted) return;
     res.status(200).json({
       success: true,
       message: "Answer generated successfully.",
       data,
     });
   } catch (error) {
+    if (res.writableEnded || req.requestSignal?.aborted) return;
     next(error);
   }
 }

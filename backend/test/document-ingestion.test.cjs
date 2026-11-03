@@ -115,7 +115,7 @@ test("Gemini chat model reads its separate key and applies factual defaults", ()
     delete process.env.GEMINI_CHAT_MODEL;
     const model = createChatModel();
     assert.equal(model.apiKey, "test-google-key");
-    assert.equal(model.model, "gemini-3.8-flash");
+    assert.equal(model.model, "gemini-3.1-flash-lite");
     assert.equal(model.temperature, 0);
     assert.equal(model.maxOutputTokens, 1024);
   } finally {
@@ -648,4 +648,39 @@ test("answer provider overload returns a specific service error instead of a kno
     assert.match(error.message, /temporarily busy/);
     return true;
   });
+});
+
+test("slow query embeddings return a specific timeout and cancel the provider call", async () => {
+  const previous = process.env.AI_EMBEDDING_TIMEOUT_MS;
+  process.env.AI_EMBEDDING_TIMEOUT_MS = "5";
+  let providerSignal;
+  try {
+    await assert.rejects(retrieveRelevantChunks("Internet is not working", { role: "employee" }, {
+      async getStoredModels() { return [getEmbeddingModelIdentifier()]; },
+      embedQuery(_question, _format, signal) { providerSignal = signal; return new Promise(() => {}); },
+      async search() { assert.fail("search must not start after an embedding timeout"); },
+    }), { code: "EMBEDDING_QUERY_TIMEOUT", statusCode: 504 });
+    assert.equal(providerSignal.aborted, true);
+  } finally {
+    if (previous === undefined) delete process.env.AI_EMBEDDING_TIMEOUT_MS; else process.env.AI_EMBEDDING_TIMEOUT_MS = previous;
+  }
+});
+
+test("slow answer generation aborts its model call with an explicit timeout", async () => {
+  const previous = process.env.GEMINI_CHAT_TIMEOUT_MS;
+  process.env.GEMINI_CHAT_TIMEOUT_MS = "5";
+  let providerSignal;
+  const chunk = {
+    _id: new mongoose.Types.ObjectId(), documentId: new mongoose.Types.ObjectId(), chunkIndex: 0,
+    content: "Check the network cable.", score: 0.9,
+    document: { _id: new mongoose.Types.ObjectId(), name: "guide.docx", type: "docx", status: "completed", visibility: "organization" },
+  };
+  try {
+    await assert.rejects(generateGroundedAnswer("Internet is not working", [chunk], [], {
+      invoke(_messages, options) { providerSignal = options.signal; return new Promise(() => {}); },
+    }), { code: "AI_REQUEST_TIMEOUT", statusCode: 504 });
+    assert.equal(providerSignal.aborted, true);
+  } finally {
+    if (previous === undefined) delete process.env.GEMINI_CHAT_TIMEOUT_MS; else process.env.GEMINI_CHAT_TIMEOUT_MS = previous;
+  }
 });

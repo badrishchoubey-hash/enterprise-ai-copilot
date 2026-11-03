@@ -3,6 +3,7 @@ import { GoogleGenerativeAI, TaskType, type GenerativeModel } from "@google/gene
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { AppError } from "../middleware/appError.js";
 import { withEmbeddingRetry, type EmbeddingRetryBudget } from "../services/embeddingRetryService.js";
+import { getQueryEmbeddingTimeoutMs } from "./aiTimeouts.js";
 
 export type EmbeddingTask = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY";
 export type EmbeddingProvider = "gemini" | "openai";
@@ -21,6 +22,7 @@ class GeminiTaskAwareEmbeddings extends GoogleGenerativeAIEmbeddings {
     fields: ConstructorParameters<typeof GoogleGenerativeAIEmbeddings>[0],
     private readonly useQuestionAnsweringPrefixes: boolean,
     onRetry?: (waitMs: number) => Promise<void>,
+    private readonly querySignal?: AbortSignal,
   ) {
     super(fields);
     this.retryBudget = { remainingRetries: 3, onRetry };
@@ -28,6 +30,16 @@ class GeminiTaskAwareEmbeddings extends GoogleGenerativeAIEmbeddings {
       { model: this.model },
       { baseUrl: fields?.baseUrl },
     );
+  }
+
+  protected override async _embedQueryContent(text: string): Promise<number[]> {
+    const response = await this.batchClient.embedContent({
+      content: { role: "user", parts: [{ text: this.stripNewLines ? text.replace(/\n/g, " ") : text }] },
+      taskType: this.taskType,
+      title: this.title,
+      ...({ outputDimensionality: this.outputDimensionality }),
+    }, { signal: this.querySignal });
+    return response.embedding.values ?? [];
   }
 
   protected override async _embedDocumentsContent(documents: string[]): Promise<number[][]> {
@@ -105,6 +117,7 @@ export function createEmbeddings(
   task: EmbeddingTask = "RETRIEVAL_DOCUMENT",
   format: GeminiEmbeddingFormat = "current",
   onRetry?: (waitMs: number) => Promise<void>,
+  querySignal?: AbortSignal,
 ):
   | GoogleGenerativeAIEmbeddings
   | OpenAIEmbeddings {
@@ -142,6 +155,7 @@ export function createEmbeddings(
     return new GeminiTaskAwareEmbeddings({
       apiKey,
       model,
+      maxRetries: task === "RETRIEVAL_QUERY" ? 0 : 2,
       ...(!isEmbedding2
         ? {
             taskType:
@@ -153,7 +167,7 @@ export function createEmbeddings(
       outputDimensionality:
         dimensions ??
         (isEmbedding2 ? 768 : undefined),
-    }, isEmbedding2 && format === "current", onRetry);
+    }, isEmbedding2 && format === "current", onRetry, querySignal);
   }
 
   const baseURL = process.env.EMBEDDING_BASE_URL?.trim();
@@ -164,7 +178,7 @@ export function createEmbeddings(
     ...(baseURL ? { configuration: { baseURL } } : {}),
     batchSize,
     maxConcurrency: 2,
-    maxRetries: 5,
-    timeout: 60_000,
+    maxRetries: task === "RETRIEVAL_QUERY" ? 0 : 5,
+    timeout: task === "RETRIEVAL_QUERY" ? getQueryEmbeddingTimeoutMs() : 60_000,
   });
 }
