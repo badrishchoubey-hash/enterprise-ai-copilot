@@ -28,6 +28,7 @@ const documentSchema = new Schema<KnowledgeDocument>(
       default: "uploaded",
     },
     fileHash: { ...requiredText(128), immutable: true },
+    contentHash: { ...optionalText(128), immutable: true },
     uploadedBy: {
       type: objectId(),
       required: true,
@@ -44,6 +45,9 @@ const documentSchema = new Schema<KnowledgeDocument>(
     fileSize: { type: Number, min: 1 },
     mimeType: { ...optionalText(120), immutable: true },
     pageCount: { type: Number, min: 1 },
+    totalChunks: { type: Number, min: 0, default: 0 },
+    processedAt: { type: Date },
+    processingHeartbeatAt: { type: Date },
     errorMessage: optionalText(2000),
   },
   { timestamps: true, strict: "throw" },

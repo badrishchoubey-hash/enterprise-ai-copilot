@@ -14,7 +14,10 @@ type HeaderProps = {
   readonly isAdmin?: boolean;
 };
 
-export default function Header({ onOpenSidebar, isAdmin = false }: HeaderProps) {
+export default function Header({
+  onOpenSidebar,
+  isAdmin = false,
+}: HeaderProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((state) => state.auth.user);
@@ -73,34 +76,34 @@ export default function Header({ onOpenSidebar, isAdmin = false }: HeaderProps) 
       .join("") || (isAdmin ? "AD" : "EU");
 
   return (
-    <header className="fixed inset-x-0 top-0 z-20 flex h-[86px] items-center justify-between border-b border-[#e8eaf1] bg-white px-5 sm:px-8">
-      <div className="flex items-center gap-3">
+    <header className="fixed left-0 right-0 top-0 z-20 flex h-[72px] items-center justify-between gap-3 border-b border-[#e8eaf1] bg-white px-3 sm:h-[86px] sm:gap-5 sm:px-8 lg:left-[248px]">
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         <Button variant="icon" onClick={onOpenSidebar} className="lg:hidden">
           <Menu size={21} />
         </Button>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[.16em] text-[#9ca5b2]">
+        <div className="hidden min-w-0 flex-1 lg:block lg:flex-none">
+          <p className="hidden text-[11px] font-semibold uppercase tracking-[.16em] text-[#9ca5b2] lg:block">
             {workspaceIsAdmin ? "Admin workspace" : "Employee workspace"}
           </p>
-          <h1 className="mt-1 text-lg font-bold text-[#263244] pl-[250px]">
+          <h1 className="truncate text-sm font-bold text-[#263244] sm:text-base lg:mt-1 lg:text-lg">
             {profile
               ? `Welcome back, ${profile.name}`
               : workspaceIsAdmin
                 ? "Admin workspace"
                 : "Welcome back"}{" "}
-            <span className="text-[#f2ab54]">✦</span>
+            <span className="text-[#f2ab54]">{"\u2726"}</span>
           </h1>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
         <Button
           variant="secondary"
-          className="hidden h-9 gap-2 rounded-lg px-3 text-xs sm:inline-flex"
+          className="!hidden h-9 shrink-0 gap-2 whitespace-nowrap rounded-lg px-3 text-xs lg:!inline-flex"
         >
           <Search size={14} />
           Quick search
           <span className="ml-5 rounded bg-[#f1f2f6] px-1.5 py-0.5 text-[10px]">
-            ⌘ K
+            {"\u2318"} K
           </span>
         </Button>
         <Button variant="icon" className="relative">

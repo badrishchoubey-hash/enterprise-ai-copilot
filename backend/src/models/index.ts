@@ -1,4 +1,5 @@
 export { Users } from "./User";
+export { Organizations } from "./Organization";
 export { Documents } from "./Document";
 export { DocumentChunks } from "./DocumentChunk";
 export { Conversations } from "./Conversation";
@@ -10,6 +11,7 @@ export { RefreshTokens } from "./RefreshToken";
 export { paginateByCreatedAt } from "./pagination";
 
 export type { UserDocument } from "../types/modelTypes/User.js";
+export type { OrganizationDocument } from "../types/modelTypes/Organization.js";
 export type { KnowledgeDocument } from "../types/modelTypes/Document.js";
 export type { DocumentChunkDocument } from "../types/modelTypes/DocumentChunk.js";
 export type { ConversationDocument } from "../types/modelTypes/Conversation.js";

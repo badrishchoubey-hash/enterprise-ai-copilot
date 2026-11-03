@@ -122,9 +122,9 @@ export default function AdminUploadPage() {
             >
               <p className="font-bold">{uploadedName} was uploaded.</p>
               <p className="mt-1 text-xs leading-5">
-                The original file is stored in Cloudinary and registered in the
-                knowledge base. Document extraction and indexing are not
-                configured yet, so it remains in the Uploaded state.
+                The original file is stored and text extraction has started.
+                Check Manage documents for processing status and retry any
+                document that fails.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
@@ -211,7 +211,9 @@ export default function AdminUploadPage() {
                 <label className="block text-xs font-bold text-[#526074]">
                   Access
                   <select {...register("visibility")} className={fieldClass}>
-                    <option value="organization">Everyone in organization</option>
+                    <option value="organization">
+                      Everyone in organization
+                    </option>
                     <option value="department">Selected department</option>
                     <option value="private">Admins only</option>
                   </select>

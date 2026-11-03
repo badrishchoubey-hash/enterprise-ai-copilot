@@ -17,13 +17,14 @@ import type {
 import { AppError } from "../middleware/appError.js";
 import { logError, logInfo } from "../utils/logger.js";
 import { AuthError } from "../errors/AuthError.js";
+import { getOrganizationId } from "./organizationTenantService.js";
 
 // --------------------------------------------------
 // Configuration
 // --------------------------------------------------
 
 const ACCESS_EXPIRES_IN: JwtExpiresIn = (process.env.JWT_EXPIRES_IN ??
-  "15m") as JwtExpiresIn;
+  "24h") as JwtExpiresIn;
 
 const REFRESH_EXPIRES_IN: JwtExpiresIn = (process.env.JWT_REFRESH_EXPIRES_IN ??
   "7d") as JwtExpiresIn;
@@ -281,6 +282,7 @@ export async function registerUser(
           {
             name,
             email: normalizedEmail,
+            tenantId: getOrganizationId(),
             passwordHash,
             role: input.role ?? "employee",
             department: department || undefined,

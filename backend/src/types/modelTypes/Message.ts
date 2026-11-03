@@ -9,6 +9,10 @@ export interface MessageDocument extends Document {
     documentId: Types.ObjectId;
     chunkId?: Types.ObjectId;
     score?: number;
+    documentName?: string;
+    page?: number;
+    section?: string;
+    chunkIndex?: number;
   }>;
   modelName?: string;
   tokenCount?: number;

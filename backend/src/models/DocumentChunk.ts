@@ -21,6 +21,8 @@ const chunkSchema = new Schema<DocumentChunkDocument>(
     content: requiredText(100_000),
     tokenCount: { type: Number, min: 1 },
     pageNumber: { type: Number, min: 1 },
+    embedding: { type: [Number], default: undefined },
+    embeddingModel: optionalText(128),
     embeddingRef: optionalText(500),
     metadata: { type: Schema.Types.Mixed },
   },

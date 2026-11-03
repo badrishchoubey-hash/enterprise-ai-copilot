@@ -14,7 +14,7 @@ const backendBaseUrl = /\/api$/i.test(trimmedBackendUrl)
   : `${trimmedBackendUrl}/api`;
 
 const backendAuth = axios.create({
-  baseURL: backendBaseUrl,
+  baseURL: `${backendBaseUrl}/v1`,
   // Leave room for the backend's 30-second request timeout to return a
   // meaningful database error instead of closing the proxy request first.
   timeout: Number(process.env.BACKEND_REQUEST_TIMEOUT_MS) || 35_000,

@@ -44,6 +44,11 @@ export const connectDB = async (): Promise<void> => {
   connectionPromise = mongoose
     .connect(mongoUri, { serverSelectionTimeoutMS: 10_000 })
     .then(() => {
+      return mongoose.connection
+        .db!.collection("rateLimitCounters")
+        .createIndex({ resetAt: 1 }, { expireAfterSeconds: 0 });
+    })
+    .then(() => {
       console.log("MongoDB connected");
     })
     .catch((error: unknown) => {

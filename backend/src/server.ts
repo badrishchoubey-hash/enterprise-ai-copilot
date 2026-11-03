@@ -8,10 +8,17 @@ import { connectDB } from "./config/database.js";
 import authRoutes from "./routes/authRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { requestTimeout } from "./middleware/requestTimeout.js";
+import { ensureOrganizationTenant } from "./services/organizationTenantService.js";
+import {
+  queuePendingUploadedDocuments,
+  recoverInterruptedDocumentProcessing,
+  waitForDocumentProcessing,
+} from "./services/documentProcessingService.js";
 
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
 
@@ -61,16 +68,6 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(requestLogger);
 
-// Ensure MongoDB is connected for serverless invocations
-app.use(async (_req, _res, next) => {
-  try {
-    await connectDB();
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
 // Root & Health Check Endpoints
 app.get("/", (_req: Request, res: Response) => {
   res
@@ -84,25 +81,47 @@ app.get("/health", (_req: Request, res: Response) => {
     .json({ status: "OK", message: "OmniMind Backend API is operational" });
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/user", userRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/ai", aiRoutes);
 
 app.use(errorHandler);
 
-// Start listening even if Atlas is temporarily unavailable. Database-backed
-// requests call connectDB through the middleware above and can recover later.
-const startServer = (): void => {
-  app.listen(PORT, () => {
-    console.log(`⚡️ [server]: Server running on http://localhost:${PORT}`);
+const startServer = async (): Promise<void> => {
+  await connectDB();
+  await ensureOrganizationTenant();
+  const interrupted = await recoverInterruptedDocumentProcessing();
+  const queued = await queuePendingUploadedDocuments();
+  if (interrupted || queued) {
+    console.log(`[server]: Recovered ${interrupted} interrupted document(s); queued ${queued} pending document(s)`);
+  }
+  const server = app.listen(PORT, () => {
+    console.log(`[server]: Server running on http://localhost:${PORT}`);
   });
-  void connectDB().catch((error: unknown) => {
-    console.error("❌ [server]: Initial MongoDB connection failed:", error);
-  });
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[server]: ${signal} received; draining requests`);
+    server.close(() => {
+      void waitForDocumentProcessing()
+        .then(() => import("./config/database.js"))
+        .then(({ disconnectDB }) => disconnectDB())
+        .then(() => process.exit(0))
+        .catch(() => process.exit(1));
+    });
+    setTimeout(() => process.exit(1), 25_000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 };
 
 if (process.env.VERCEL !== "1") {
-  startServer();
+  void startServer().catch((error: unknown) => {
+    console.error("[server]: Startup failed:", error);
+    process.exit(1);
+  });
 }
 
 export default app;

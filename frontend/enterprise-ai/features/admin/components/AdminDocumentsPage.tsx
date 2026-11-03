@@ -5,15 +5,24 @@ import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Download, FileText, Pencil, Trash2 } from "lucide-react";
+import {
+  Download,
+  Eye,
+  FileText,
+  Pencil,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import Button from "@/components/ui/button/button";
 import Input from "@/components/ui/input/input";
+import Modal from "@/components/common/Modal";
 import AdminLayout from "./AdminLayout";
 import {
   deleteAdminDocument,
   downloadAdminDocument,
   getAdminDocuments,
   getAdminErrorMessage,
+  retryAdminDocument,
   updateAdminDocument,
   type AdminDocumentFilters,
 } from "@/services/api/admin";
@@ -86,6 +95,8 @@ export default function AdminDocumentsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<AdminDocument | null>(null);
+  const [viewing, setViewing] = useState<AdminDocument | null>(null);
+  const [deleting, setDeleting] = useState<AdminDocument | null>(null);
 
   const filterForm = useForm<FilterValues>({
     resolver: zodResolver(filterSchema) as never,
@@ -117,6 +128,15 @@ export default function AdminDocumentsPage() {
       current = false;
     };
   }, [filters, page, reload]);
+
+  useEffect(() => {
+    if (!documents.some((document) => document.status === "processing")) return;
+    const interval = window.setInterval(
+      () => setReload((count) => count + 1),
+      2_000,
+    );
+    return () => window.clearInterval(interval);
+  }, [documents]);
 
   useEffect(() => {
     if (!editing) return;
@@ -156,9 +176,10 @@ export default function AdminDocumentsPage() {
     }
   };
 
-  const removeDocument = async (document: AdminDocument) => {
-    if (!window.confirm(`Delete “${document.name}” and its stored file?`))
-      return;
+  const removeDocument = async () => {
+    if (!deleting) return;
+    const document = deleting;
+    setDeleting(null);
     setWorkingId(document.id);
     setError("");
     setNotice("");
@@ -188,6 +209,21 @@ export default function AdminDocumentsPage() {
       anchor.download = document.name;
       anchor.click();
       URL.revokeObjectURL(objectUrl);
+    } catch (requestError) {
+      setError(getAdminErrorMessage(requestError));
+    } finally {
+      setWorkingId("");
+    }
+  };
+
+  const retryProcessing = async (document: AdminDocument) => {
+    setWorkingId(document.id);
+    setError("");
+    setNotice("");
+    try {
+      await retryAdminDocument(document.id);
+      setNotice(`Processing restarted for ${document.name}.`);
+      setReload((count) => count + 1);
     } catch (requestError) {
       setError(getAdminErrorMessage(requestError));
     } finally {
@@ -331,6 +367,14 @@ export default function AdminDocumentsPage() {
                     <div className="inline-flex items-center gap-1">
                       <Button
                         variant="icon"
+                        aria-label={`View metadata for ${document.name}`}
+                        onClick={() => setViewing(document)}
+                        className="rounded-lg p-2 text-[#687386]"
+                      >
+                        <Eye size={16} />
+                      </Button>
+                      <Button
+                        variant="icon"
                         aria-label={`Download ${document.name}`}
                         disabled={workingId === document.id}
                         onClick={() => void downloadDocument(document)}
@@ -338,6 +382,18 @@ export default function AdminDocumentsPage() {
                       >
                         <Download size={16} />
                       </Button>
+                      {document.status === "failed" && (
+                        <Button
+                          variant="icon"
+                          aria-label={`Retry processing ${document.name}`}
+                          title="Retry processing"
+                          disabled={workingId === document.id}
+                          onClick={() => void retryProcessing(document)}
+                          className="rounded-lg p-2 text-[#c77a17]"
+                        >
+                          <RotateCcw size={16} />
+                        </Button>
+                      )}
                       <Button
                         variant="icon"
                         aria-label={`Edit ${document.name}`}
@@ -350,7 +406,7 @@ export default function AdminDocumentsPage() {
                         variant="icon"
                         aria-label={`Delete ${document.name}`}
                         disabled={workingId === document.id}
-                        onClick={() => void removeDocument(document)}
+                        onClick={() => setDeleting(document)}
                         className="rounded-lg p-2 text-[#c34b4b]"
                       >
                         <Trash2 size={16} />
@@ -361,7 +417,13 @@ export default function AdminDocumentsPage() {
               ))}
             </tbody>
           </table>
-          {loading && <div className="space-y-4 p-6" aria-label="Loading documents">{[1, 2, 3, 4, 5].map((row) => <div key={row} className="h-10 rounded-lg shimmer" />)}</div>}
+          {loading && (
+            <div className="space-y-4 p-6" aria-label="Loading documents">
+              {[1, 2, 3, 4, 5].map((row) => (
+                <div key={row} className="h-10 rounded-lg shimmer" />
+              ))}
+            </div>
+          )}
           {!loading && documents.length === 0 && (
             <div className="p-10 text-center">
               <p className="text-sm font-semibold text-[#526074]">
@@ -402,70 +464,155 @@ export default function AdminDocumentsPage() {
       </section>
 
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#152033]/35 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-document-title"
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        <Modal
+          isOpen
+          title="Document access and metadata"
+          onClose={() => setEditing(null)}
+        >
+          <form
+            onSubmit={editForm.handleSubmit(saveDocument)}
+            className="mt-5 space-y-4"
           >
-            <h2
-              id="edit-document-title"
-              className="text-lg font-bold text-[#263244]"
-            >
-              Document access and metadata
-            </h2>
-            <form
-              onSubmit={editForm.handleSubmit(saveDocument)}
-              className="mt-5 space-y-4"
-            >
-              <label className="block text-xs font-semibold text-[#596579]">
-                Display name
-                <Input
-                  {...editForm.register("name")}
-                  className={inputClass}
-                  error={editForm.formState.errors.name?.message}
-                />
-              </label>
-              <label className="block text-xs font-semibold text-[#596579]">
-                Department
-                <Input
-                  {...editForm.register("department")}
-                  className={inputClass}
-                  error={editForm.formState.errors.department?.message}
-                />
-              </label>
-              <label className="block text-xs font-semibold text-[#596579]">
-                Access
-                <select
-                  {...editForm.register("visibility")}
-                  className={inputClass}
-                >
-                  <option value="organization">Everyone in organization</option>
-                  <option value="department">Selected department</option>
-                  <option value="private">Admins only</option>
-                </select>
-              </label>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setEditing(null)}
-                  className="rounded-lg px-4 py-2 text-sm"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={workingId === editing.id}
-                  className="rounded-lg px-4 py-2 text-sm font-semibold"
-                >
-                  Save changes
-                </Button>
-              </div>
-            </form>
-          </section>
-        </div>
+            <label className="block text-xs font-semibold text-[#596579]">
+              Display name
+              <Input
+                {...editForm.register("name")}
+                className={inputClass}
+                error={editForm.formState.errors.name?.message}
+              />
+            </label>
+            <label className="block text-xs font-semibold text-[#596579]">
+              Department
+              <Input
+                {...editForm.register("department")}
+                className={inputClass}
+                error={editForm.formState.errors.department?.message}
+              />
+            </label>
+            <label className="block text-xs font-semibold text-[#596579]">
+              Access
+              <select
+                {...editForm.register("visibility")}
+                className={inputClass}
+              >
+                <option value="organization">Everyone in organization</option>
+                <option value="department">Selected department</option>
+                <option value="private">Admins only</option>
+              </select>
+            </label>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setEditing(null)}
+                className="rounded-lg px-4 py-2 text-sm"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={workingId === editing.id}
+                className="rounded-lg px-4 py-2 text-sm font-semibold"
+              >
+                Save changes
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
+
+      {viewing && (
+        <Modal
+          isOpen
+          title="Document metadata"
+          onClose={() => setViewing(null)}
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="mt-1 truncate text-sm text-[#687386]">
+                {viewing.name}
+              </p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusTone[viewing.status]}`}
+            >
+              {viewing.status[0]?.toUpperCase()}
+              {viewing.status.slice(1)}
+            </span>
+          </div>
+          {viewing.errorMessage && (
+            <p className="mt-4 rounded-lg bg-[#fff0f0] p-3 text-xs text-[#bd4444]">
+              {viewing.errorMessage}
+            </p>
+          )}
+          <dl className="mt-5 grid grid-cols-1 gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
+            {[
+              ["Type", viewing.type.toUpperCase()],
+              ["MIME type", viewing.mimeType || "Unavailable"],
+              ["File size", formatSize(viewing.fileSize)],
+              ["Pages", viewing.pageCount?.toLocaleString() || "Unavailable"],
+              ["Indexed chunks", viewing.totalChunks?.toLocaleString() || "0"],
+              ["Processed", viewing.processedAt ? formatDate(viewing.processedAt) : "Not processed"],
+              [
+                "Access",
+                viewing.visibility === "department"
+                  ? `Department · ${viewing.department || "Unassigned"}`
+                  : viewing.visibility === "organization"
+                    ? "Organization"
+                    : "Admins only",
+              ],
+              ["Uploaded by", viewing.uploadedBy],
+              ["Uploaded", formatDate(viewing.createdAt)],
+              ["Last updated", formatDate(viewing.updatedAt)],
+            ].map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="text-xs font-semibold text-[#8a94a4]">
+                  {label}
+                </dt>
+                <dd className="mt-1 break-words text-[#354155]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-6 flex justify-end">
+            <Button
+              variant="secondary"
+              onClick={() => setViewing(null)}
+              className="rounded-lg px-4 py-2 text-sm"
+            >
+              Close
+            </Button>
+          </div>
+        </Modal>
+      )}
+
+      <Modal
+        isOpen={Boolean(deleting)}
+        title="Delete document?"
+        onClose={() => setDeleting(null)}
+        closeOnBackdrop={workingId !== deleting?.id}
+      >
+        <p className="text-sm leading-6 text-[#687386]">
+          Delete{" "}
+          <span className="font-semibold text-[#354155]">{deleting?.name}</span>{" "}
+          and its stored file? This action cannot be undone.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            disabled={workingId === deleting?.id}
+            onClick={() => setDeleting(null)}
+            className="rounded-lg px-4 py-2 text-sm"
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={!deleting || workingId === deleting.id}
+            onClick={() => void removeDocument()}
+            className="rounded-lg bg-[#c34b4b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ae3e3e]"
+          >
+            {workingId === deleting?.id ? "Deleting…" : "Delete document"}
+          </Button>
+        </div>
+      </Modal>
     </AdminLayout>
   );
 }

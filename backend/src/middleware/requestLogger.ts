@@ -14,6 +14,14 @@ export const requestLogger: RequestHandler = (
   let responseBody: unknown;
   const originalJson = res.json.bind(res);
   const originalSend = res.send.bind(res);
+  const isAiQuestion = req.path === "/api/v1/ai/ask";
+  const requestPayload = isAiQuestion
+    ? {
+        questionLength:
+          typeof req.body?.question === "string" ? req.body.question.length : undefined,
+        conversationIdProvided: typeof req.body?.conversationId === "string",
+      }
+    : req.body;
   res.json = ((body: unknown) => {
     responseBody = body;
     return originalJson(body);
@@ -26,7 +34,7 @@ export const requestLogger: RequestHandler = (
     requestId,
     method: req.method,
     path: req.path,
-    payload: req.body,
+    payload: requestPayload,
   });
   res.once("finish", () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
@@ -36,7 +44,9 @@ export const requestLogger: RequestHandler = (
       path: req.path,
       status: res.statusCode,
       durationMs: Math.round(durationMs),
-      response: redactResponseForLog(responseBody),
+      response: isAiQuestion
+        ? { redacted: true }
+        : redactResponseForLog(responseBody),
     });
   });
   res.once("close", () => {

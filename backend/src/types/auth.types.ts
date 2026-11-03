@@ -15,6 +15,10 @@ export interface JwtPayload extends AccessTokenClaims {
   sub?: string;
 }
 
+export interface AuthenticatedUserContext extends AccessTokenClaims {
+  tenantId: string;
+}
+
 export interface RefreshJwtPayload {
   sub: string;
   jti: string;

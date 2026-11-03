@@ -26,6 +26,8 @@ export interface AdminDocument {
   fileSize?: number;
   mimeType?: string;
   pageCount?: number;
+  totalChunks?: number;
+  processedAt?: string;
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;

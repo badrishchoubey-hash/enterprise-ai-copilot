@@ -195,8 +195,9 @@ export async function getAdminDocuments(
         : [];
   return {
     items: items as AdminDocument[],
-    page: typeof result?.page === "number" ? result.page : filters.page ?? 1,
-    limit: typeof result?.limit === "number" ? result.limit : filters.limit ?? 25,
+    page: typeof result?.page === "number" ? result.page : (filters.page ?? 1),
+    limit:
+      typeof result?.limit === "number" ? result.limit : (filters.limit ?? 25),
     total: typeof result?.total === "number" ? result.total : items.length,
     totalPages:
       typeof result?.totalPages === "number"
@@ -214,15 +215,19 @@ export async function uploadAdminDocument(input: {
   onProgress?: (percent: number) => void;
 }): Promise<AdminDocument> {
   const extension = input.file.name.split(".").pop()?.toLowerCase() ?? "";
-  const mimeType = input.file.type ||
-    ({
-      pdf: "application/pdf",
-      doc: "application/msword",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      txt: "text/plain",
-      md: "text/markdown",
-      csv: "text/csv",
-    } as Record<string, string>)[extension] || "application/octet-stream";
+  const mimeType =
+    input.file.type ||
+    (
+      {
+        pdf: "application/pdf",
+        doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        txt: "text/plain",
+        md: "text/markdown",
+        csv: "text/csv",
+      } as Record<string, string>
+    )[extension] ||
+    "application/octet-stream";
   const { data: signatureResponse } = await apiClient.post<
     ApiResponse<{
       cloudName: string;
@@ -307,7 +312,7 @@ export async function uploadAdminDocument(input: {
   formData.append("overwrite", String(signed.params.overwrite));
   formData.append("signature", signed.signature);
 
-  const uploadedAsset = (await new Promise<{
+  const uploadedAsset = await new Promise<{
     public_id?: string;
     version?: number;
     error?: { message?: string };
@@ -316,10 +321,13 @@ export async function uploadAdminDocument(input: {
     request.open("POST", signed.uploadUrl);
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) {
-        input.onProgress?.(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+        input.onProgress?.(
+          Math.min(99, Math.round((event.loaded / event.total) * 100)),
+        );
       }
     };
-    request.onerror = () => reject(new Error("The Cloudinary upload connection failed."));
+    request.onerror = () =>
+      reject(new Error("The Cloudinary upload connection failed."));
     request.onload = () => {
       let response: {
         public_id?: string;
@@ -333,30 +341,29 @@ export async function uploadAdminDocument(input: {
         return;
       }
       if (request.status < 200 || request.status >= 300) {
-        reject(new Error(response.error?.message ?? "Cloudinary could not store this file."));
+        reject(
+          new Error(
+            response.error?.message ?? "Cloudinary could not store this file.",
+          ),
+        );
         return;
       }
       resolve(response);
     };
     request.send(formData);
-  }));
+  });
   const uploadedAssetResponse = uploadedAsset as {
     public_id?: string;
     version?: number;
     error?: { message?: string };
   };
   if (!uploadedAssetResponse.public_id || !uploadedAssetResponse.version) {
-    throw new Error(uploadedAssetResponse.error?.message ?? "Cloudinary could not store this file.");
+    throw new Error(
+      uploadedAssetResponse.error?.message ??
+        "Cloudinary could not store this file.",
+    );
   }
   input.onProgress?.(100);
-
-  const fileDigest = await crypto.subtle.digest(
-    "SHA-256",
-    await input.file.arrayBuffer(),
-  );
-  const fileHash = Array.from(new Uint8Array(fileDigest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 
   const { data } = await apiClient.post<ApiResponse<AdminDocument>>(
     "/v1/admin/documents/upload",
@@ -368,7 +375,6 @@ export async function uploadAdminDocument(input: {
       visibility: input.visibility,
       publicId: uploadedAssetResponse.public_id,
       version: uploadedAssetResponse.version,
-      fileHash,
     },
   );
   return data.data;
@@ -391,6 +397,15 @@ export async function deleteAdminDocument(documentId: string): Promise<void> {
   );
 }
 
+export async function retryAdminDocument(
+  documentId: string,
+): Promise<AdminDocument> {
+  const { data } = await apiClient.post<ApiResponse<AdminDocument>>(
+    `/v1/admin/documents/${encodeURIComponent(documentId)}/retry`,
+  );
+  return data.data;
+}
+
 export async function downloadAdminDocument(
   documentId: string,
 ): Promise<Blob | string> {
@@ -402,7 +417,9 @@ export async function downloadAdminDocument(
     typeof headers["content-type"] === "string" &&
     headers["content-type"].includes("application/json")
   ) {
-    const payload = JSON.parse(await data.text()) as ApiResponse<{ url: string }>;
+    const payload = JSON.parse(await data.text()) as ApiResponse<{
+      url: string;
+    }>;
     return payload.data.url;
   }
   return data;

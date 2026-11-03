@@ -1,10 +1,11 @@
 import { Schema } from "mongoose";
-import { optionalText, registered, requiredText } from "./modelHelpers";
+import { objectId, optionalText, registered, requiredText } from "./modelHelpers";
 import type { UserDocument } from "../types/modelTypes/User.js";
 
 const userSchema = new Schema<UserDocument>(
   {
     name: requiredText(160),
+    tenantId: { type: objectId(), required: true, ref: "Organizations", immutable: true },
     email: {
       type: String,
       required: true,

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "An Enterprise AI Knowledge & Support Copilot that allows employees and support agents to search organizational knowledge, ask questions about uploaded documents, and receive AI-generated answers with source citations.",
   "license": "ISC",
+  "engines": {
+    "node": ">=22.13.0 <23 || >=24"
+  },
   "author": "badrish choubey",
   "type": "commonjs",
   "main": "dist/server.js",
@@ -11,21 +14,33 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "format": "prettier --write .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "npm run build && node --test test/*.test.cjs"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@langchain/classic": "^1.0.57",
+    "@langchain/community": "^1.1.29",
+    "@langchain/core": "^1.3.4",
+    "@langchain/google-genai": "^2.3.4",
+    "@langchain/openai": "^1.8.0",
+    "@langchain/textsplitters": "^1.0.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
     "cors": "^2.8.6",
+    "d3-dsv": "^3.0.2",
     "dotenv": "^18.0.9",
     "express": "^5.3.0",
     "express-validator": "^7.3.2",
     "file-type": "^22.2.0",
     "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.13.0",
     "mongodb": "^7.7.0",
     "mongoose": "^9.11.4",
     "multer": "^2.5.0",
-    "sanitize-filename": "^1.6.4"
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^6.5.438",
+    "sanitize-filename": "^1.6.4",
+    "word-extractor": "^1.0.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

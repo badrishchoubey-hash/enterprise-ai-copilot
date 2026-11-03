@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import Button from "@/components/ui/button/button";
 import Input from "@/components/ui/input/input";
+import Modal from "@/components/common/Modal";
 import AdminLayout from "./AdminLayout";
 import {
   createAdminUser,
@@ -57,6 +58,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [deactivating, setDeactivating] = useState<AdminUser | null>(null);
 
   const filterForm = useForm<FilterValues>({
     resolver: zodResolver(filterSchema) as never,
@@ -160,8 +162,10 @@ export default function AdminUsersPage() {
     }
   };
 
-  const deactivate = async (user: AdminUser) => {
-    if (!window.confirm(`Deactivate ${user.name}’s account?`)) return;
+  const deactivate = async () => {
+    if (!deactivating) return;
+    const user = deactivating;
+    setDeactivating(null);
     setError("");
     setNotice("");
     try {
@@ -288,7 +292,7 @@ export default function AdminUsersPage() {
                         {user.isActive && (
                           <Button
                             variant="ghost"
-                            onClick={() => void deactivate(user)}
+                            onClick={() => setDeactivating(user)}
                             className="rounded-lg px-3 py-2 text-xs font-semibold text-[#c34b4b]"
                           >
                             Deactivate
@@ -305,7 +309,13 @@ export default function AdminUsersPage() {
                 No users match these filters.
               </p>
             )}
-            {loading && <div className="space-y-4 p-6" aria-label="Loading users">{[1, 2, 3, 4, 5].map((row) => <div key={row} className="h-10 rounded-lg shimmer" />)}</div>}
+            {loading && (
+              <div className="space-y-4 p-6" aria-label="Loading users">
+                {[1, 2, 3, 4, 5].map((row) => (
+                  <div key={row} className="h-10 rounded-lg shimmer" />
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#eef0f4] px-5 py-4 text-xs text-[#8a94a4]">
@@ -402,84 +412,99 @@ export default function AdminUsersPage() {
       </div>
 
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#152033]/35 p-4">
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-user-title"
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"
+        <Modal isOpen title="Edit user" onClose={() => setEditing(null)}>
+          <form
+            onSubmit={editForm.handleSubmit(submitEdit)}
+            className="mt-5 grid gap-4 sm:grid-cols-2"
           >
-            <h2
-              id="edit-user-title"
-              className="text-lg font-bold text-[#263244]"
-            >
-              Edit user
-            </h2>
-            <form
-              onSubmit={editForm.handleSubmit(submitEdit)}
-              className="mt-5 grid gap-4 sm:grid-cols-2"
-            >
-              <label className="text-xs font-semibold text-[#596579]">
-                Name
-                <Input
-                  {...editForm.register("name")}
-                  className={inputClass}
-                  error={editForm.formState.errors.name?.message}
-                />
-              </label>
-              <label className="text-xs font-semibold text-[#596579]">
-                Email
-                <Input
-                  {...editForm.register("email")}
-                  type="email"
-                  className={inputClass}
-                  error={editForm.formState.errors.email?.message}
-                />
-              </label>
-              <label className="text-xs font-semibold text-[#596579]">
-                Role
-                <select {...editForm.register("role")} className={selectClass}>
-                  <option value="employee">Employee</option>
-                  <option value="support_agent">Support agent</option>
-                  <option value="admin">Administrator</option>
-                </select>
-              </label>
-              <label className="text-xs font-semibold text-[#596579]">
-                Department
-                <Input
-                  {...editForm.register("department")}
-                  className={inputClass}
-                  error={editForm.formState.errors.department?.message}
-                />
-              </label>
-              <label className="flex items-center gap-2 text-xs font-semibold text-[#596579] sm:col-span-2">
-                <input
-                  type="checkbox"
-                  {...editForm.register("isActive")}
-                  className="h-4 w-4 accent-[#5146e5]"
-                />
-                Account is active
-              </label>
-              <div className="flex justify-end gap-2 sm:col-span-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setEditing(null)}
-                  className="rounded-lg px-4 py-2 text-sm"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={editForm.formState.isSubmitting}
-                  className="rounded-lg px-4 py-2 text-sm font-semibold"
-                >
-                  {editForm.formState.isSubmitting ? "Saving…" : "Save changes"}
-                </Button>
-              </div>
-            </form>
-          </section>
-        </div>
+            <label className="text-xs font-semibold text-[#596579]">
+              Name
+              <Input
+                {...editForm.register("name")}
+                className={inputClass}
+                error={editForm.formState.errors.name?.message}
+              />
+            </label>
+            <label className="text-xs font-semibold text-[#596579]">
+              Email
+              <Input
+                {...editForm.register("email")}
+                type="email"
+                className={inputClass}
+                error={editForm.formState.errors.email?.message}
+              />
+            </label>
+            <label className="text-xs font-semibold text-[#596579]">
+              Role
+              <select {...editForm.register("role")} className={selectClass}>
+                <option value="employee">Employee</option>
+                <option value="support_agent">Support agent</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-[#596579]">
+              Department
+              <Input
+                {...editForm.register("department")}
+                className={inputClass}
+                error={editForm.formState.errors.department?.message}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold text-[#596579] sm:col-span-2">
+              <input
+                type="checkbox"
+                {...editForm.register("isActive")}
+                className="h-4 w-4 accent-[#5146e5]"
+              />
+              Account is active
+            </label>
+            <div className="flex justify-end gap-2 sm:col-span-2">
+              <Button
+                variant="secondary"
+                onClick={() => setEditing(null)}
+                className="rounded-lg px-4 py-2 text-sm"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={editForm.formState.isSubmitting}
+                className="rounded-lg px-4 py-2 text-sm font-semibold"
+              >
+                {editForm.formState.isSubmitting ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
+      <Modal
+        isOpen={Boolean(deactivating)}
+        title="Deactivate user?"
+        onClose={() => setDeactivating(null)}
+      >
+        <p className="text-sm leading-6 text-[#687386]">
+          Deactivate{" "}
+          <span className="font-semibold text-[#354155]">
+            {deactivating?.name}
+          </span>
+          ’s account? They will no longer be able to sign in.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setDeactivating(null)}
+            className="rounded-lg px-4 py-2 text-sm"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => void deactivate()}
+            className="rounded-lg bg-[#c34b4b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#ae3e3e]"
+          >
+            Deactivate account
+          </Button>
+        </div>
+      </Modal>
     </AdminLayout>
   );
 }

@@ -60,7 +60,7 @@ apiClient.interceptors.response.use(
       const controller = new AbortController();
       refreshController = controller;
       refreshPromise = apiClient
-        .post("/auth/refresh", undefined, { signal: controller.signal })
+        .post("/v1/auth/refresh", undefined, { signal: controller.signal })
         .then(() => undefined)
         .finally(() => {
           if (refreshController === controller) {

@@ -6,6 +6,8 @@ export interface DocumentChunkDocument extends Document {
   content: string;
   tokenCount?: number;
   pageNumber?: number;
+  embedding?: number[];
+  embeddingModel?: string;
   embeddingRef?: string;
   metadata?: Record<string, unknown>;
   tenantId: Types.ObjectId;

@@ -14,12 +14,16 @@ export interface KnowledgeDocument extends Document {
     | "failed"
     | "archived";
   fileHash: string;
+  contentHash?: string;
   uploadedBy: Types.ObjectId;
   storageKey: string;
   storageProvider?: "gridfs" | "cloudinary";
   fileSize?: number;
   mimeType?: string;
   pageCount?: number;
+  totalChunks?: number;
+  processedAt?: Date;
+  processingHeartbeatAt?: Date;
   errorMessage?: string;
   tenantId: Types.ObjectId;
   visibility: "private" | "department" | "organization";

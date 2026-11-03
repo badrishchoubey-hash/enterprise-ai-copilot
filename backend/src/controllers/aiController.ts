@@ -1,0 +1,38 @@
+import type { NextFunction, Request, Response } from "express";
+import { Types } from "mongoose";
+import { AppError } from "../middleware/appError.js";
+import { validateAskQuestionBody } from "../services/questionAnsweringValidation.js";
+import { askKnowledgeBase } from "../services/questionAnsweringService.js";
+
+export async function postAskQuestion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    if (!req.user) {
+      throw new AppError(401, "Authentication required.", "AUTHENTICATION_REQUIRED");
+    }
+    const input = validateAskQuestionBody(req.body);
+    if (!Types.ObjectId.isValid(req.user.userId) || !Types.ObjectId.isValid(req.user.tenantId)) {
+      throw new AppError(401, "Authentication required.", "AUTHENTICATION_REQUIRED");
+    }
+    const data = await askKnowledgeBase(
+      input,
+      {
+        userId: new Types.ObjectId(req.user.userId),
+        tenantId: new Types.ObjectId(req.user.tenantId),
+        role: req.user.role,
+        department: req.user.department,
+      },
+      req.requestId,
+    );
+    res.status(200).json({
+      success: true,
+      message: "Answer generated successfully.",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+}

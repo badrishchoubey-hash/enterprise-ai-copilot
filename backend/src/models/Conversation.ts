@@ -6,7 +6,7 @@ const conversationSchema = new Schema<ConversationDocument>(
   {
     userId: { type: objectId(), required: true, ref: "Users", immutable: true },
     title: requiredText(300),
-    tenantId: { type: objectId(), required: true, ref: "Users" },
+    tenantId: { type: objectId(), required: true, ref: "Organizations" },
     lastMessageAt: Date,
     archivedAt: Date,
   },

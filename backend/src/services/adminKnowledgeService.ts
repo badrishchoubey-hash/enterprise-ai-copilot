@@ -9,8 +9,19 @@ import Users from "../models/User.js";
 import QueryLogs from "../models/QueryLog.js";
 import Feedback from "../models/Feedback.js";
 import { AppError } from "../middleware/appError.js";
-import { getCloudinary, getMaxDocumentSizeBytes } from "../config/cloudinary.js";
+import {
+  getCloudinary,
+  getMaxDocumentSizeBytes,
+} from "../config/cloudinary.js";
 import type { KnowledgeDocument } from "../types/modelTypes/Document.js";
+import {
+  loadDocumentFile,
+  type SupportedDocumentExtension,
+} from "./documentLoaderService.js";
+import {
+  downloadCloudinaryAssetToTemporaryFile,
+} from "../utils/tempDocumentFile.js";
+import { getOrganizationId } from "./organizationTenantService.js";
 
 const visibilities = ["private", "department", "organization"] as const;
 const statuses = [
@@ -21,7 +32,7 @@ const statuses = [
   "archived",
 ] as const;
 
-const documentMimeTypes: Record<string, string> = {
+const documentMimeTypes: Record<SupportedDocumentExtension, string> = {
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -38,10 +49,14 @@ const documentMimeAliases: Record<string, Set<string>> = {
   ]),
   txt: new Set(["text/plain", "application/octet-stream"]),
   md: new Set(["text/markdown", "text/plain", "application/octet-stream"]),
-  csv: new Set(["text/csv", "application/vnd.ms-excel", "application/octet-stream"]),
+  csv: new Set([
+    "text/csv",
+    "application/vnd.ms-excel",
+    "application/octet-stream",
+  ]),
 };
 
-const validateUploadMetadata = (input: {
+export const validateUploadMetadata = (input: {
   filename: string;
   mimeType: string;
   fileSize: number;
@@ -51,69 +66,84 @@ const validateUploadMetadata = (input: {
   const maxSizeBytes = getMaxDocumentSizeBytes();
   const filename = sanitizeFilename(input.filename);
   const extension = filename.split(".").pop()?.toLowerCase() ?? "";
-  if (!filename || filename.length > 255 || !documentMimeTypes[extension]) {
-    throw new AppError(415, "This file type is not supported.", "UNSUPPORTED_FILE_TYPE");
+  if (
+    !filename ||
+    filename.length > 255 ||
+    !Object.hasOwn(documentMimeTypes, extension)
+  ) {
+    throw new AppError(
+      415,
+      "This file type is not supported.",
+      "UNSUPPORTED_FILE_TYPE",
+    );
   }
   if (!documentMimeAliases[extension]?.has(input.mimeType)) {
-    throw new AppError(415, "The file type does not match its extension.", "INVALID_FILE_TYPE");
+    throw new AppError(
+      415,
+      "The file type does not match its extension.",
+      "INVALID_FILE_TYPE",
+    );
   }
-  if (!Number.isInteger(input.fileSize) || input.fileSize <= 0 || input.fileSize > maxSizeBytes) {
-    throw new AppError(413, `Documents must be no larger than ${Math.floor(maxSizeBytes / (1024 * 1024))} MB.`, "FILE_TOO_LARGE");
+  if (
+    !Number.isInteger(input.fileSize) ||
+    input.fileSize <= 0 ||
+    input.fileSize > maxSizeBytes
+  ) {
+    throw new AppError(
+      413,
+      `Documents must be no larger than ${Math.floor(maxSizeBytes / (1024 * 1024))} MB.`,
+      "FILE_TOO_LARGE",
+    );
   }
   const visibility = input.visibility ?? "organization";
   if (!visibilities.includes(visibility as (typeof visibilities)[number])) {
-    throw new AppError(400, "visibility must be private, department, or organization.", "INVALID_VISIBILITY");
+    throw new AppError(
+      400,
+      "visibility must be private, department, or organization.",
+      "INVALID_VISIBILITY",
+    );
   }
   if (input.department && input.department.trim().length > 120) {
-    throw new AppError(400, "department must be at most 120 characters.", "INVALID_DEPARTMENT");
+    throw new AppError(
+      400,
+      "department must be at most 120 characters.",
+      "INVALID_DEPARTMENT",
+    );
   }
   if (visibility === "department" && !input.department?.trim()) {
-    throw new AppError(400, "department is required for department visibility.", "DEPARTMENT_REQUIRED");
+    throw new AppError(
+      400,
+      "department is required for department visibility.",
+      "DEPARTMENT_REQUIRED",
+    );
   }
-  return { filename, extension, visibility: visibility as DocumentChanges["visibility"] };
+  return {
+    filename,
+    extension: extension as SupportedDocumentExtension,
+    visibility: visibility as DocumentChanges["visibility"],
+  };
 };
 
-async function validateCloudinaryFileSignature(
-  publicId: string,
-  extension: string,
+export async function validateDocumentFileContent(
+  filePath: string,
+  extension: SupportedDocumentExtension,
 ): Promise<void> {
-  const expectedSignatures: Record<string, Set<string>> = {
+  const { fileTypeFromFile } = await import("file-type");
+  const detected = await fileTypeFromFile(filePath);
+  const binarySignatures: Partial<
+    Record<SupportedDocumentExtension, Set<string>>
+  > = {
     pdf: new Set(["pdf"]),
     doc: new Set(["cfb"]),
-    docx: new Set(["docx", "zip"]),
+    docx: new Set(["zip"]),
   };
-  const expected = expectedSignatures[extension];
-  if (!expected) return;
-
-  const cloudinary = getCloudinary();
-  const url = cloudinary.utils.private_download_url(publicId, extension, {
-    resource_type: "raw",
-    type: "authenticated",
-    expires_at: Math.floor(Date.now() / 1000) + 60,
-  });
-  const response = await fetch(url, { headers: { Range: "bytes=0-8191" } });
-  if (!response.ok || !response.body) {
-    throw new AppError(502, "The uploaded file could not be checked.", "CLOUDINARY_VALIDATION_FAILED");
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (total < 8192) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      const chunk = value.subarray(0, 8192 - total);
-      chunks.push(chunk);
-      total += chunk.byteLength;
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-  }
-  const buffer = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
-  const { fileTypeFromBuffer } = await import("file-type");
-  const detected = await fileTypeFromBuffer(buffer);
-  if (!detected || !expected.has(detected.ext)) {
-    throw new AppError(415, "The file content does not match its extension.", "INVALID_FILE_SIGNATURE");
+  const expected = binarySignatures[extension];
+  if (expected ? !detected || !expected.has(detected.ext) : detected !== undefined) {
+    throw new AppError(
+      415,
+      "The file content does not match its extension.",
+      "INVALID_FILE_SIGNATURE",
+    );
   }
 }
 
@@ -179,6 +209,8 @@ export const toAdminDocument = (document: KnowledgeDocument) => {
     fileSize: document.fileSize,
     mimeType: document.mimeType,
     pageCount: document.pageCount,
+    totalChunks: document.totalChunks ?? 0,
+    processedAt: document.processedAt,
     errorMessage: document.errorMessage,
     createdAt: document.createdAt,
     updatedAt: document.updatedAt,
@@ -266,7 +298,6 @@ export async function uploadAdminDocument(
     visibility?: string;
     publicId: string;
     version: number;
-    fileHash?: string;
   },
   actorId: string,
 ) {
@@ -284,7 +315,11 @@ export async function uploadAdminDocument(
     input.publicId.length > 500 ||
     !Number.isInteger(input.version)
   ) {
-    throw new AppError(400, "The uploaded Cloudinary asset is invalid.", "INVALID_CLOUDINARY_ASSET");
+    throw new AppError(
+      400,
+      "The uploaded Cloudinary asset is invalid.",
+      "INVALID_CLOUDINARY_ASSET",
+    );
   }
   const cloudinary = getCloudinary();
   let asset: Record<string, unknown>;
@@ -294,7 +329,11 @@ export async function uploadAdminDocument(
       type: "authenticated",
     });
   } catch {
-    throw new AppError(400, "The uploaded file could not be verified in Cloudinary.", "INVALID_CLOUDINARY_ASSET");
+    throw new AppError(
+      400,
+      "The uploaded file could not be verified in Cloudinary.",
+      "INVALID_CLOUDINARY_ASSET",
+    );
   }
   if (
     asset.public_id !== input.publicId ||
@@ -304,53 +343,75 @@ export async function uploadAdminDocument(
     typeof asset.bytes !== "number" ||
     asset.bytes <= 0 ||
     asset.bytes > getMaxDocumentSizeBytes() ||
-    typeof asset.asset_id !== "string" ||
-    (input.fileHash !== undefined && !/^[a-f0-9]{64}$/i.test(input.fileHash))
+    asset.bytes !== input.fileSize ||
+    typeof asset.asset_id !== "string"
   ) {
-    throw new AppError(400, "The uploaded file does not match the authorized document upload.", "INVALID_CLOUDINARY_ASSET");
-  }
-  try {
-    await validateCloudinaryFileSignature(input.publicId, metadata.extension);
-  } catch (error) {
-    await cloudinary.uploader
-      .destroy(input.publicId, {
-        resource_type: "raw",
-        type: "authenticated",
-        invalidate: true,
-      })
-      .catch(() => undefined);
-    throw error;
-  }
-  const fileHash =
-    input.fileHash?.toLowerCase() ??
-    crypto.createHash("sha256").update(asset.asset_id as string).digest("hex");
-  const duplicate = await Documents.findOne({ tenantId: actorId, fileHash });
-  if (duplicate) {
-    if (duplicate.storageKey === input.publicId) {
-      return toAdminDocument(duplicate);
-    }
-    await cloudinary.uploader
-      .destroy(input.publicId, {
-        resource_type: "raw",
-        type: "authenticated",
-        invalidate: true,
-      })
-      .catch(() => undefined);
     throw new AppError(
-      409,
-      "This file has already been uploaded.",
-      "DUPLICATE_DOCUMENT",
+      400,
+      "The uploaded file does not match the authorized document upload.",
+      "INVALID_CLOUDINARY_ASSET",
     );
   }
-
+  let temporaryFile: Awaited<
+    ReturnType<typeof downloadCloudinaryAssetToTemporaryFile>
+  > | undefined;
+  let preserveCloudinaryAsset = false;
+  const organizationId = getOrganizationId();
   try {
+    temporaryFile = await downloadCloudinaryAssetToTemporaryFile(
+      input.publicId,
+      metadata.extension,
+      getMaxDocumentSizeBytes(),
+    );
+    if (
+      temporaryFile.byteLength !== asset.bytes ||
+      temporaryFile.byteLength !== input.fileSize
+    ) {
+      throw new AppError(
+        400,
+        "The uploaded file size does not match its verified content.",
+        "INVALID_CLOUDINARY_ASSET",
+      );
+    }
+    await validateDocumentFileContent(
+      temporaryFile.filePath,
+      metadata.extension,
+    );
+    const fileHash = temporaryFile.sha256;
+    const duplicate = await Documents.findOne({
+      tenantId: organizationId,
+      $or: [
+        { contentHash: fileHash },
+        { contentHash: { $exists: false }, fileHash },
+      ],
+    });
+    if (duplicate) {
+      if (duplicate.storageKey === input.publicId) {
+        preserveCloudinaryAsset = true;
+        return toAdminDocument(duplicate);
+      }
+      throw new AppError(
+        409,
+        "This content already exists in the knowledge base.",
+        "DUPLICATE_DOCUMENT",
+      );
+    }
+
+    // Parse once before creating the record so malformed or empty files are
+    // rejected. Processing later repeats this from the durable Cloudinary file.
+    await loadDocumentFile(
+      temporaryFile.filePath,
+      metadata.extension,
+      metadata.filename,
+    );
     const document = await Documents.create({
       name: metadata.filename,
       type: metadata.extension,
       status: "uploaded",
       fileHash,
+      contentHash: fileHash,
       uploadedBy: actorId,
-      tenantId: actorId,
+      tenantId: organizationId,
       visibility: metadata.visibility,
       department: input.department?.trim() || undefined,
       storageKey: input.publicId,
@@ -360,21 +421,37 @@ export async function uploadAdminDocument(
     });
     return toAdminDocument(document);
   } catch (error) {
-    await cloudinary.uploader
-      .destroy(input.publicId, {
-        resource_type: "raw",
-        type: "authenticated",
-        invalidate: true,
-      })
-      .catch(() => undefined);
     if ((error as { code?: number })?.code === 11000) {
+      const existingAssetDocument = await Documents.findOne({
+        tenantId: organizationId,
+        storageKey: input.publicId,
+      });
+      if (existingAssetDocument) return toAdminDocument(existingAssetDocument);
+      await cloudinary.uploader
+        .destroy(input.publicId, {
+          resource_type: "raw",
+          type: "authenticated",
+          invalidate: true,
+        })
+        .catch(() => undefined);
       throw new AppError(
         409,
-        "This file has already been uploaded.",
+        "This content already exists in the knowledge base.",
         "DUPLICATE_DOCUMENT",
       );
     }
+    if (!preserveCloudinaryAsset) {
+      await cloudinary.uploader
+        .destroy(input.publicId, {
+          resource_type: "raw",
+          type: "authenticated",
+          invalidate: true,
+        })
+        .catch(() => undefined);
+    }
     throw error;
+  } finally {
+    await temporaryFile?.cleanup().catch(() => undefined);
   }
 }
 
@@ -390,7 +467,11 @@ export function createAdminDocumentUploadSignature(
 ) {
   const metadata = validateUploadMetadata(input);
   if (!Types.ObjectId.isValid(actorId)) {
-    throw new AppError(401, "Authentication required.", "AUTHENTICATION_REQUIRED");
+    throw new AppError(
+      401,
+      "Authentication required.",
+      "AUTHENTICATION_REQUIRED",
+    );
   }
   const cloudinary = getCloudinary();
   const timestamp = Math.floor(Date.now() / 1000);
@@ -403,7 +484,11 @@ export function createAdminDocumentUploadSignature(
   };
   const config = cloudinary.config();
   if (!config.api_key || !config.cloud_name || !config.api_secret) {
-    throw new AppError(503, "Cloudinary document storage is unavailable.", "CLOUDINARY_UNAVAILABLE");
+    throw new AppError(
+      503,
+      "Cloudinary document storage is unavailable.",
+      "CLOUDINARY_UNAVAILABLE",
+    );
   }
   return {
     cloudName: config.cloud_name,
@@ -478,14 +563,15 @@ export async function updateAdminDocument(
 
 export async function deleteAdminDocument(documentId: string) {
   const document = await findAdminDocument(documentId);
-  await Documents.deleteOne({ _id: document._id }).exec();
-  await Promise.all([
-    DocumentChunks.deleteMany({ documentId: document._id }).exec(),
-    Messages.updateMany(
-      { "citations.documentId": document._id },
-      { $pull: { citations: { documentId: document._id } } },
-    ).exec(),
-  ]);
+  if (document.status === "processing") {
+    throw new AppError(
+      409,
+      "Wait for document processing to finish before deleting it.",
+      "DOCUMENT_PROCESSING",
+    );
+  }
+  // Remove external storage first. If that fails, retain the database record
+  // so the deletion can be retried without losing the only file reference.
   if (document.storageProvider === "cloudinary") {
     await getCloudinary().uploader.destroy(document.storageKey, {
       resource_type: "raw",
@@ -498,6 +584,14 @@ export async function deleteAdminDocument(documentId: string) {
     const fileExists = await bucket.find({ _id: fileId }).hasNext();
     if (fileExists) await bucket.delete(fileId);
   }
+  await Documents.deleteOne({ _id: document._id }).exec();
+  await Promise.all([
+    DocumentChunks.deleteMany({ documentId: document._id }).exec(),
+    Messages.updateMany(
+      { "citations.documentId": document._id },
+      { $pull: { citations: { documentId: document._id } } },
+    ).exec(),
+  ]);
   return toAdminDocument(document);
 }
 
@@ -509,10 +603,10 @@ export async function documentFile(documentId: string) {
       document.storageKey,
       document.type,
       {
-      resource_type: "raw",
-      type: "authenticated",
-      expires_at: Math.floor(Date.now() / 1000) + 60,
-      attachment: true,
+        resource_type: "raw",
+        type: "authenticated",
+        expires_at: Math.floor(Date.now() / 1000) + 60,
+        attachment: true,
       },
     );
     return { document, url };
@@ -552,7 +646,7 @@ export async function getKnowledgeBaseSummary() {
       .filter((value): value is string => typeof value === "string")
       .sort(),
     supportedVisibility: [...visibilities],
-    processingAvailable: false,
+    processingAvailable: true,
   };
 }
 

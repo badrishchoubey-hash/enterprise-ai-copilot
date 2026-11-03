@@ -10,6 +10,18 @@ const baseCookie = {
   sameSite: "lax" as const,
   path: "/",
 };
+
+function expirationSeconds(expiresIn: string | number): number {
+  if (typeof expiresIn === "number") return Math.max(0, Math.floor(expiresIn));
+  const match = expiresIn.match(/^(\d+)(s|m|h|d)$/);
+  if (!match) return 24 * 60 * 60;
+  const amount = Number(match[1]);
+  const multiplier = { s: 1, m: 60, h: 60 * 60, d: 24 * 60 * 60 }[
+    match[2] as "s" | "m" | "h" | "d"
+  ];
+  return amount * multiplier;
+}
+
 export function setAuthCookies(
   response: NextResponse,
   accessToken: string,
@@ -17,7 +29,7 @@ export function setAuthCookies(
   expiresIn: string | number,
   role?: string,
 ) {
-  const maxAge = typeof expiresIn === "number" ? expiresIn : 15 * 60;
+  const maxAge = expirationSeconds(expiresIn);
   response.cookies.set(accessCookie, accessToken, { ...baseCookie, maxAge });
   response.cookies.set(refreshCookie, refreshToken, {
     ...baseCookie,

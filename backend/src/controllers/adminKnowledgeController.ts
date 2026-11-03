@@ -13,6 +13,10 @@ import {
   type DocumentChanges,
 } from "../services/adminKnowledgeService.js";
 import { recordAdminAudit } from "../utils/adminAudit.js";
+import {
+  queueUploadedDocument,
+  retryFailedDocument,
+} from "../services/documentProcessingService.js";
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -72,18 +76,30 @@ export async function postAdminDocument(
 ): Promise<void> {
   try {
     if (!isObject(req.body))
-      throw new AppError(400, "Request body must be a JSON object.", "INVALID_BODY");
+      throw new AppError(
+        400,
+        "Request body must be a JSON object.",
+        "INVALID_BODY",
+      );
     if (
       req.body.department !== undefined &&
       typeof req.body.department !== "string"
     ) {
-      throw new AppError(400, "department must be a string.", "INVALID_DEPARTMENT");
+      throw new AppError(
+        400,
+        "department must be a string.",
+        "INVALID_DEPARTMENT",
+      );
     }
     if (
       req.body.visibility !== undefined &&
       typeof req.body.visibility !== "string"
     ) {
-      throw new AppError(400, "visibility must be a string.", "INVALID_VISIBILITY");
+      throw new AppError(
+        400,
+        "visibility must be a string.",
+        "INVALID_VISIBILITY",
+      );
     }
     const document = await uploadAdminDocument(
       {
@@ -94,17 +110,37 @@ export async function postAdminDocument(
         visibility: req.body.visibility as string | undefined,
         publicId: String(req.body.publicId ?? ""),
         version: Number(req.body.version),
-        fileHash:
-          typeof req.body.fileHash === "string" ? req.body.fileHash : undefined,
       },
       req.user?.userId ?? "",
     );
+    const processing = await queueUploadedDocument(document.id);
+    const responseDocument = processing ?? document;
     await recordAdminAudit(req, "upload", "document", document.id, {
       name: document.name,
       size: document.fileSize,
+      status: responseDocument.status,
+    });
+    res.status(201).json({ success: true, data: responseDocument });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function retryAdminDocumentRoute(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const document = await retryFailedDocument(
+      routeParam(req.params.documentId),
+    );
+    if (!document)
+      throw new AppError(404, "Document not found.", "DOCUMENT_NOT_FOUND");
+    await recordAdminAudit(req, "retry-processing", "document", document.id, {
       status: document.status,
     });
-    res.status(201).json({ success: true, data: document });
+    res.status(202).json({ success: true, data: document });
   } catch (error) {
     next(error);
   }
@@ -117,16 +153,24 @@ export async function getAdminDocumentUploadSignature(
 ): Promise<void> {
   try {
     if (!isObject(req.body))
-      throw new AppError(400, "Request body must be a JSON object.", "INVALID_BODY");
+      throw new AppError(
+        400,
+        "Request body must be a JSON object.",
+        "INVALID_BODY",
+      );
     const data = createAdminDocumentUploadSignature(
       {
         filename: String(req.body.filename ?? ""),
         mimeType: String(req.body.mimeType ?? ""),
         fileSize: Number(req.body.fileSize),
         department:
-          typeof req.body.department === "string" ? req.body.department : undefined,
+          typeof req.body.department === "string"
+            ? req.body.department
+            : undefined,
         visibility:
-          typeof req.body.visibility === "string" ? req.body.visibility : undefined,
+          typeof req.body.visibility === "string"
+            ? req.body.visibility
+            : undefined,
       },
       req.user?.userId ?? "",
     );
@@ -161,6 +205,8 @@ export async function getAdminDocument(
         fileSize: document.fileSize,
         mimeType: document.mimeType,
         pageCount: document.pageCount,
+        totalChunks: document.totalChunks ?? 0,
+        processedAt: document.processedAt,
         errorMessage: document.errorMessage,
         createdAt: document.createdAt,
         updatedAt: document.updatedAt,
